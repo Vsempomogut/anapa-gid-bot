@@ -213,7 +213,7 @@ def get_route_selection_keyboard():
     for route_id, data in ROUTES.items():
         builder.button(text=data["name"], callback_data=f"start_route_{route_id}")
     builder.button(text="🔙 Главное меню", callback_data="main_menu")
-    builder.adjust(1)
+    builder.adjust(2)  # кнопки маршрутов в два столбца
     return builder.as_markup()
 
 def get_quest_keyboard():
@@ -251,10 +251,26 @@ async def send_location_with_photo(chat_id, state):
     photo_path = get_photo_path(loc)
     total = len(route["locations"])
     progress_bar = "▓" * step + "░" * (total - step)
+
+    # Расстояние до следующей точки
+    distance_text = ""
+    if step + 1 < total:
+        next_loc = route["locations"][step + 1]
+        dist_m = geodesic(
+            (loc["lat"], loc["lon"]),
+            (next_loc["lat"], next_loc["lon"])
+        ).meters
+        if dist_m >= 1000:
+            distance_text = f"\n📏 До следующей точки: {dist_m/1000:.1f} км"
+        else:
+            steps_count = int(dist_m / 0.75)  # примерный шаг 0.75 м
+            distance_text = f"\n📏 До следующей точки: {int(dist_m)} м (примерно {steps_count} шагов)"
+
     caption = (f"📍 <b>{route['name']}</b> – локация {step+1}/{total}\n"
-               f"<b>{loc['name']}</b>\n\n{loc['description']}\n\n"
+               f"<b>{loc['name']}</b>\n\n{loc['description']}{distance_text}\n\n"
                f"Прогресс: {progress_bar} ({step}/{total})\n"
                f"Отправьте геопозицию или используйте кнопки.")
+
     if photo_path:
         await bot.send_photo(chat_id, FSInputFile(photo_path), caption=caption, parse_mode="HTML", reply_markup=get_quest_keyboard())
     else:
@@ -265,7 +281,94 @@ async def send_location_info(chat_id, route_id, index):
     if loc and "info" in loc:
         await bot.send_message(chat_id, f"📚 <b>Это интересно:</b>\n{loc['info']}", parse_mode="HTML")
 
-# ===== ОБРАБОТЧИКИ =====
+# ===== АДМИН-ПАНЕЛЬ (исправленная) =====
+async def show_admin_panel(target):
+    """Отображает админ-панель в переданном объекте (Message или CallbackQuery)"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📊 Статистика", callback_data="admin_stats")
+    builder.button(text="👥 Пользователи", callback_data="admin_users")
+    builder.button(text="📍 Локации", callback_data="admin_locations")
+    builder.button(text="🔔 Напомнить застрявшим", callback_data="admin_remind_stuck")
+    if CHART_AVAILABLE:
+        builder.button(text="📈 График", callback_data="admin_chart")
+    builder.adjust(2, 2, 1)
+
+    if isinstance(target, types.Message):
+        await target.answer("🔐 <b>Админ-панель</b>", parse_mode="HTML", reply_markup=builder.as_markup())
+    else:  # CallbackQuery
+        await target.message.edit_text("🔐 <b>Админ-панель</b>", parse_mode="HTML", reply_markup=builder.as_markup())
+
+@dp.message(Command("admin"))
+async def admin_panel(message: types.Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ Доступ запрещён!")
+        return
+    await show_admin_panel(message)
+
+@dp.callback_query(F.data == "admin_stats")
+async def admin_stats(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+    total_users = db_execute("SELECT COUNT(*) FROM users", fetch=True)[0][0]
+    active = db_execute("SELECT COUNT(*) FROM users WHERE completed=0 AND current_step>0", fetch=True)[0][0]
+    completed = db_execute("SELECT COUNT(*) FROM users WHERE completed=1", fetch=True)[0][0]
+    text = f"👥 Всего: {total_users}\n🎮 Активных: {active}\n🏆 Завершили: {completed}"
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="admin_back")
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.answer()
+
+@dp.callback_query(F.data == "admin_users")
+async def admin_users(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+    users = db_execute("SELECT username, first_name, route_id, current_step FROM users WHERE completed=0 LIMIT 10", fetch=True)
+    text = "👥 Активные игроки:\n\n"
+    for u, f, r, s in users:
+        name = u or f or "Игрок"
+        text += f"{name} – {ROUTES.get(r, {}).get('name', r)} (шаг {s})\n"
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="admin_back")
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.answer()
+
+@dp.callback_query(F.data == "admin_locations")
+async def admin_locations(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+    text = "📍 Статистика по локациям будет здесь (можно доработать)"
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="admin_back")
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.answer()
+
+@dp.callback_query(F.data == "admin_remind_stuck")
+async def remind_stuck(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+    threshold = datetime.now() - timedelta(hours=24)
+    stuck = db_execute(
+        "SELECT user_id FROM users WHERE completed=0 AND current_step>0 AND last_activity < ?",
+        (threshold,), fetch=True
+    )
+    count = 0
+    for (user_id,) in stuck:
+        try:
+            await bot.send_message(user_id, "⏰ Вы давно не заходили в гид! Продолжите своё приключение 🗺")
+            count += 1
+        except:
+            pass
+    await callback.answer(f"Напоминания отправлены {count} пользователям.", show_alert=True)
+
+@dp.callback_query(F.data == "admin_back")
+async def admin_back(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("⛔ Доступ запрещён!", show_alert=True)
+        return
+    await show_admin_panel(callback)
+    await callback.answer()
+
+# ===== ОСНОВНЫЕ ОБРАБОТЧИКИ =====
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -421,8 +524,6 @@ async def leaders(callback: types.CallbackQuery):
 
 @dp.message(Command("leaders"))
 async def leaders_cmd(message: types.Message):
-    await leaders(message)  # заглушка, лучше отдельную функцию
-    # Исправим: создадим отдельную логику для команды
     rows = db_execute("""
         SELECT username, first_name, route_id,
                (julianday(completed_date) - julianday(start_time)) * 86400 AS duration
@@ -484,86 +585,6 @@ async def skip_cmd(message: types.Message, state: FSMContext):
         await send_location_with_photo(message.chat.id, state)
     else:
         await message.answer("🏆 Маршрут завершён!", reply_markup=get_main_menu_keyboard(user_id))
-
-# ===== АДМИН-ПАНЕЛЬ (упрощённая) =====
-@dp.message(Command("admin"))
-async def admin_panel(message: types.Message):
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("⛔ Доступ запрещён!")
-        return
-    builder = InlineKeyboardBuilder()
-    builder.button(text="📊 Статистика", callback_data="admin_stats")
-    builder.button(text="👥 Пользователи", callback_data="admin_users")
-    builder.button(text="📍 Локации", callback_data="admin_locations")
-    builder.button(text="🔔 Напомнить застрявшим", callback_data="admin_remind_stuck")
-    if CHART_AVAILABLE:
-        builder.button(text="📈 График", callback_data="admin_chart")
-    builder.adjust(2, 2, 1)
-    await message.answer("🔐 <b>Админ-панель</b>", parse_mode="HTML", reply_markup=builder.as_markup())
-
-@dp.callback_query(F.data == "admin_stats")
-async def admin_stats(callback: types.CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS:
-        return
-    total_users = db_execute("SELECT COUNT(*) FROM users", fetch=True)[0][0]
-    active = db_execute("SELECT COUNT(*) FROM users WHERE completed=0 AND current_step>0", fetch=True)[0][0]
-    completed = db_execute("SELECT COUNT(*) FROM users WHERE completed=1", fetch=True)[0][0]
-    text = f"👥 Всего: {total_users}\n🎮 Активных: {active}\n🏆 Завершили: {completed}"
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🔙 Назад", callback_data="admin_back")
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
-    await callback.answer()
-
-@dp.callback_query(F.data == "admin_users")
-async def admin_users(callback: types.CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS:
-        return
-    users = db_execute("SELECT username, first_name, route_id, current_step FROM users WHERE completed=0 LIMIT 10", fetch=True)
-    text = "👥 Активные игроки:\n\n"
-    for u, f, r, s in users:
-        name = u or f or "Игрок"
-        text += f"{name} – {ROUTES.get(r, {}).get('name', r)} (шаг {s})\n"
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🔙 Назад", callback_data="admin_back")
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
-    await callback.answer()
-
-@dp.callback_query(F.data == "admin_locations")
-async def admin_locations(callback: types.CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS:
-        return
-    text = "📍 Статистика по локациям будет здесь (можно доработать)"
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🔙 Назад", callback_data="admin_back")
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
-    await callback.answer()
-
-@dp.callback_query(F.data == "admin_remind_stuck")
-async def remind_stuck(callback: types.CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS:
-        return
-    threshold = datetime.now() - timedelta(hours=24)
-    stuck = db_execute(
-        "SELECT user_id FROM users WHERE completed=0 AND current_step>0 AND last_activity < ?",
-        (threshold,), fetch=True
-    )
-    count = 0
-    for (user_id,) in stuck:
-        try:
-            await bot.send_message(user_id, "⏰ Вы давно не заходили в гид! Продолжите своё приключение 🗺")
-            count += 1
-        except:
-            pass
-    await callback.answer(f"Напоминания отправлены {count} пользователям.", show_alert=True)
-
-@dp.callback_query(F.data == "admin_back")
-async def admin_back(callback: types.CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS:
-        return
-    await admin_panel(callback.message)  # перевызов панели
-    await callback.answer()
-
-# ... остальная часть админки (график) по желанию
 
 @dp.message()
 async def any_text(message: types.Message):
