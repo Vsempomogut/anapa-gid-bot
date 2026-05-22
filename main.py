@@ -425,14 +425,19 @@ async def continue_quest(callback: types.CallbackQuery, state: FSMContext):
             await send_location_with_photo(callback.message.chat.id, state)
     await callback.answer()
 
+# ИСПРАВЛЕННАЯ ФУНКЦИЯ ПРОПУСКА
 @dp.callback_query(F.data == "skip_location")
 async def skip_location(callback: types.CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     data = await state.get_data()
     route_id = data.get("route")
     step = data.get("step", 0)
-    if route_id not in ROUTES or step >= len(ROUTES[route_id]["locations"]):
-        await callback.answer("Маршрут завершён!")
+    if route_id not in ROUTES:
+        await callback.answer("Маршрут не найден", show_alert=True)
+        return
+    if step >= len(ROUTES[route_id]["locations"]):
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.answer()
         return
     loc = ROUTES[route_id]["locations"][step]
     log_location_action(user_id, route_id, step, loc["name"], 'skipped')
@@ -444,7 +449,11 @@ async def skip_location(callback: types.CallbackQuery, state: FSMContext):
         await callback.message.answer(f"⏭ «{loc['name']}» пропущена.")
         await send_location_with_photo(callback.message.chat.id, state)
     else:
-        await callback.message.answer("🏆 Маршрут завершён!", reply_markup=get_main_menu_keyboard(user_id))
+        await callback.message.answer(
+            f"⏭ «{loc['name']}» пропущена.\n🏆 <b>Маршрут завершён!</b>",
+            parse_mode="HTML",
+            reply_markup=get_main_menu_keyboard(user_id)
+        )
     await callback.answer()
 
 @dp.message(F.location)
