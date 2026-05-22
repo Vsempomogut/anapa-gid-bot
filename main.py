@@ -61,32 +61,290 @@ def init_db():
 
 init_db()
 
-# ===== ОБЩИЙ МАРШРУТ (19 локаций) =====
+# ===== РАСШИРЕННЫЙ СПИСОК ЛОКАЦИЙ (25) =====
 LOCATIONS = [
-    {"name": "Русские ворота", "description": "Остатки турецкой крепости.", "lat": 44.8955, "lon": 37.3198, "photo": "1.jpg", "info": "Памятник XVIII века."},
-    {"name": "Храм Святого Онуфрия", "description": "Старейший храм города.", "lat": 44.8977, "lon": 37.3174, "photo": "2.jpg", "info": "Построен в 1830 году."},
-    {"name": "Сквер Гудовича", "description": "Фонтан и тенистые аллеи.", "lat": 44.8959, "lon": 37.3148, "photo": "3.jpg", "info": "Приятный отдых."},
-    {"name": "Краеведческий музей", "description": "Богатая коллекция артефактов.", "lat": 44.8961, "lon": 37.3167, "photo": "4.jpg", "info": "От античности до СССР."},
-    {"name": "Набережная (фонтан)", "description": "Светомузыкальный фонтан.", "lat": 44.8936, "lon": 37.3170, "photo": "5.jpg", "info": "Вечернее шоу."},
-    {"name": "Памятник отдыхающему", "description": "Забавная скульптура.", "lat": 44.8933, "lon": 37.3162, "photo": "6.jpg", "info": "Фото на удачу."},
-    {"name": "Памятник «Белая шляпа»", "description": "Символ курортной моды.", "lat": 44.8921, "lon": 37.3150, "photo": "7.jpg", "info": "Популярное место."},
-    {"name": "Парк 30-летия Победы", "description": "Аттракционы, кафе.", "lat": 44.8941, "lon": 37.3135, "photo": "8.jpg", "info": "Тенистые аллеи."},
-    {"name": "Арка Центрального пляжа", "description": "Вход на главный пляж.", "lat": 44.8905, "lon": 37.3127, "photo": "9.jpg", "info": "Морские ворота."},
-    {"name": "Лермонтовская беседка", "description": "Панорамный вид на море.", "lat": 44.8917, "lon": 37.3082, "photo": "10.jpg", "info": "Любимое место поэта."},
-    {"name": "Маяк Анапский", "description": "Старинный маяк.", "lat": 44.8869, "lon": 37.2990, "photo": "11.jpg", "info": "Построен в 1898 году."},
-    {"name": "Смотровая площадка", "description": "Вид на побережье.", "lat": 44.8878, "lon": 37.3005, "photo": "12.jpg", "info": "Обзор на десятки км."},
-    {"name": "Дельфинарий", "description": "Представления с дельфинами.", "lat": 44.8790, "lon": 37.2935, "photo": "13.jpg", "info": "Работает с 1992 года."},
-    {"name": "Аквапарк «Золотой пляж»", "description": "Горки и бассейны.", "lat": 44.8840, "lon": 37.2975, "photo": "14.jpg", "info": "Более 20 горок."},
-    {"name": "Кипарисовое озеро", "description": "Зеркальная гладь среди кипарисов.", "lat": 44.910, "lon": 37.350, "photo": "15.jpg", "info": "Популярное фото."},
-    {"name": "Сукко", "description": "Долина Сукко.", "lat": 44.790, "lon": 37.370, "photo": "16.jpg", "info": "Целебный воздух."},
-    {"name": "Большой Утриш", "description": "Заповедник.", "lat": 44.750, "lon": 37.380, "photo": "17.jpg", "info": "Дикие пляжи."},
-    {"name": "Варваровка", "description": "Станица с виноградниками.", "lat": 44.840, "lon": 37.370, "photo": "18.jpg", "info": "Местное виноделие."},
-    {"name": "Благовещенская", "description": "Коса, лиманы.", "lat": 44.960, "lon": 37.280, "photo": "19.jpg", "info": "Кайтинг."},
+    {
+        "name": "Русские ворота",
+        "description": "Остатки турецкой крепости. Отправьте геопозицию, когда окажетесь рядом.",
+        "lat": 44.8955, "lon": 37.3198,
+        "photo": "1.jpg",
+        "info": (
+            "🏛 <b>Русские ворота</b> — памятник архитектуры XVIII века.\n"
+            "Построены в 1783 году как часть турецкой крепости Анапа.\n"
+            "Названы в честь 25-летия освобождения города от турок в 1828 году.\n"
+            "Автор проекта неизвестен, реставрация проводилась в 1950-х годах."
+        )
+    },
+    {
+        "name": "Храм Святого Онуфрия Великого",
+        "description": "Старейший православный храм Анапы. Подойдите поближе.",
+        "lat": 44.8977, "lon": 37.3174,
+        "photo": "2.jpg",
+        "info": (
+            "⛪ <b>Храм Святого Онуфрия</b> построен в 1830 году.\n"
+            "Освящён в честь небесного покровителя города — святого Онуфрия.\n"
+            "Архитектор: предположительно И. К. Мальберг.\n"
+            "Храм пережил Крымскую войну и советские гонения, возвращён верующим в 1990-х."
+        )
+    },
+    {
+        "name": "Сквер имени Гудовича",
+        "description": "Уютный сквер с фонтаном в центре города. Отметьтесь здесь.",
+        "lat": 44.8959, "lon": 37.3148,
+        "photo": "3.jpg",
+        "info": (
+            "🌳 <b>Сквер Гудовича</b> назван в честь генерала Ивана Гудовича,\n"
+            "командовавшего русскими войсками при взятии Анапы в 1791 году.\n"
+            "Благоустроен в 1960-х, фонтан установлен в 1985 году."
+        )
+    },
+    {
+        "name": "Анапский краеведческий музей",
+        "description": "Богатая коллекция артефактов от античности до наших дней. Вход рядом.",
+        "lat": 44.8961, "lon": 37.3167,
+        "photo": "4.jpg",
+        "info": (
+            "🏺 <b>Краеведческий музей</b> основан в 1913 году.\n"
+            "Содержит более 30 000 экспонатов: античные амфоры, турецкое оружие,\n"
+            "предметы быта казаков. Здание построено в стиле модерн в 1909 году."
+        )
+    },
+    {
+        "name": "Цветомузыкальный фонтан на набережной",
+        "description": "Светомузыкальное шоу на центральной набережной. Найдите фонтаны.",
+        "lat": 44.8936, "lon": 37.3170,
+        "photo": "5.jpg",
+        "info": (
+            "💦 <b>Цветомузыкальный фонтан</b> открыт в 2014 году.\n"
+            "Вечерние представления под музыку собирают сотни зрителей.\n"
+            "Фонтан состоит из 120 струй, подсвечиваемых RGB-светильниками."
+        )
+    },
+    {
+        "name": "Памятник «Отдыхающий»",
+        "description": "Забавная скульптура отдыхающего в гамаке на набережной.",
+        "lat": 44.8933, "lon": 37.3162,
+        "photo": "6.jpg",
+        "info": (
+            "😂 <b>Памятник отдыхающему</b> установлен в 2004 году.\n"
+            "Скульптор: Александр Аполлонов.\n"
+            "Стал одним из символов курортной Анапы, популярен для фото."
+        )
+    },
+    {
+        "name": "Памятник «Белая шляпа»",
+        "description": "Огромная белая шляпа – дань курортной моде. Сделайте фото.",
+        "lat": 44.8921, "lon": 37.3150,
+        "photo": "7.jpg",
+        "info": (
+            "👒 <b>Белая шляпа</b> — арт-объект, установленный в 2010 году.\n"
+            "Диаметр шляпы около 3 метров, весит более тонны.\n"
+            "Символизирует защиту от солнца и лёгкость отпуска."
+        )
+    },
+    {
+        "name": "Парк 30-летия Победы",
+        "description": "Главный городской парк с аттракционами и аллеями.",
+        "lat": 44.8941, "lon": 37.3135,
+        "photo": "8.jpg",
+        "info": (
+            "🌲 <b>Парк 30-летия Победы</b> разбит в 1975 году.\n"
+            "Занимает площадь около 20 гектаров.\n"
+            "Здесь установлен Вечный огонь и памятник воинам-освободителям."
+        )
+    },
+    {
+        "name": "Арка Центрального пляжа",
+        "description": "Знаменитая арка, ведущая к главному песчаному пляжу.",
+        "lat": 44.8905, "lon": 37.3127,
+        "photo": "9.jpg",
+        "info": (
+            "🏖 <b>Арка Центрального пляжа</b> построена в 1956 году по проекту\n"
+            "архитектора В. П. Соколова. Мозаичное панно на арке изображает\n"
+            "морские мотивы и является визитной карточкой курорта."
+        )
+    },
+    {
+        "name": "Лермонтовская беседка",
+        "description": "Место, где любил бывать Михаил Лермонтов. Панорамный вид на море.",
+        "lat": 44.8917, "lon": 37.3082,
+        "photo": "10.jpg",
+        "info": (
+            "📜 <b>Лермонтовская беседка</b> сооружена в 1900-х годах на месте,\n"
+            "где по преданию поэт любовался морем во время ссылки на Кавказ.\n"
+            "Отсюда открывается вид на Анапскую бухту и мыс Утриш."
+        )
+    },
+    {
+        "name": "Анапский маяк",
+        "description": "Действующий маяк на высоком обрывистом берегу.",
+        "lat": 44.8869, "lon": 37.2990,
+        "photo": "11.jpg",
+        "info": (
+            "🔦 <b>Анапский маяк</b> построен в 1898 году.\n"
+            "Высота башни 21 м, свет виден на 18 миль.\n"
+            "Конструкция: французская оптика Френеля, капитальный ремонт в 2003 г."
+        )
+    },
+    {
+        "name": "Смотровая площадка «Ласточкино гнездо»",
+        "description": "Потрясающий обзор побережья со скалы.",
+        "lat": 44.8878, "lon": 37.3005,
+        "photo": "12.jpg",
+        "info": (
+            "🌅 <b>Смотровая площадка</b> обустроена в 1970-х годах.\n"
+            "Название получила из-за сходства с крымским Ласточкиным гнездом.\n"
+            "В ясную погоду видно от мыса Утриш до косы Чушка."
+        )
+    },
+    {
+        "name": "Дельфинарий на Пионерском проспекте",
+        "description": "Яркие представления с дельфинами и морскими котиками.",
+        "lat": 44.8790, "lon": 37.2935,
+        "photo": "13.jpg",
+        "info": (
+            "🐬 <b>Анапский дельфинарий</b> открыт в 1992 году.\n"
+            "Вмещает до 500 зрителей, представления идут с мая по сентябрь.\n"
+            "Помимо дельфинов, выступают белухи и морские львы."
+        )
+    },
+    {
+        "name": "Аквапарк «Золотой пляж»",
+        "description": "Один из крупнейших аквапарков России с десятками горок.",
+        "lat": 44.8840, "lon": 37.2975,
+        "photo": "14.jpg",
+        "info": (
+            "🌊 <b>Аквапарк «Золотой пляж»</b> работает с 2006 года.\n"
+            "Более 25 горок, бассейн с искусственной волной, детский городок.\n"
+            "Расположен прямо у берега Чёрного моря."
+        )
+    },
+    {
+        "name": "Кипарисовое озеро",
+        "description": "Живописное озеро среди кипарисов – рай для фотографов.",
+        "lat": 44.910, "lon": 37.350,
+        "photo": "15.jpg",
+        "info": (
+            "🌲 <b>Кипарисовое озеро</b> — искусственный водоём, созданный в 1980-х.\n"
+            "Окружён болотными кипарисами, занесёнными в Красную книгу.\n"
+            "Популярно для снимков на фоне отражения деревьев в воде."
+        )
+    },
+    {
+        "name": "Долина Сукко",
+        "description": "Можжевеловые леса и целебный воздух в долине реки Сукко.",
+        "lat": 44.790, "lon": 37.370,
+        "photo": "16.jpg",
+        "info": (
+            "🌿 <b>Долина Сукко</b> известна реликтовыми можжевельниками возрастом до 600 лет.\n"
+            "Здесь снимались фильмы «Кавказская пленница» и «Формула любви».\n"
+            "Находится на территории заказника «Большой Утриш»."
+        )
+    },
+    {
+        "name": "Заповедник «Большой Утриш»",
+        "description": "Дикие пляжи, скалы и уникальная природа заповедника.",
+        "lat": 44.750, "lon": 37.380,
+        "photo": "17.jpg",
+        "info": (
+            "🏞 <b>Большой Утриш</b> — государственный природный заповедник с 2010 года.\n"
+            "Включает реликтовые фисташково-можжевеловые леса и морские гроты.\n"
+            "Обитают черепахи Никольского и средиземноморские сколопендры."
+        )
+    },
+    {
+        "name": "Станица Варваровка",
+        "description": "Тихая станица, окружённая виноградниками и холмами.",
+        "lat": 44.840, "lon": 37.370,
+        "photo": "18.jpg",
+        "info": (
+            "🍇 <b>Варваровка</b> основана в 1862 году как казачья станица.\n"
+            "Местные винодельни производят сорта «Саперави» и «Рислинг».\n"
+            "В окрестностях находится древнее городище Горгиппия (III в. до н.э.)."
+        )
+    },
+    {
+        "name": "Благовещенская коса",
+        "description": "Узкая песчаная коса между Чёрным морем и лиманами.",
+        "lat": 44.960, "lon": 37.280,
+        "photo": "19.jpg",
+        "info": (
+            "🏄 <b>Благовещенская</b> — посёлок на косе длиной 12 км.\n"
+            "Идеальное место для кайтинга, виндсёрфинга и пляжного отдыха.\n"
+            "Лиманы Кизилташский и Витязевский богаты лечебными грязями."
+        )
+    },
+    {
+        "name": "Винодельня «Шато Тамань»",
+        "description": "Современное винодельческое хозяйство с дегустационным залом.",
+        "lat": 45.150, "lon": 36.710,
+        "photo": "20.jpg",
+        "info": (
+            "🍷 <b>Шато Тамань</b> открыто в 2006 году на Таманском полуострове.\n"
+            "Производит премиальные вина из местного винограда.\n"
+            "Архитектура здания напоминает французские замки."
+        )
+    },
+    {
+        "name": "Крепость Фанагория",
+        "description": "Руины античного города и крепости, археологический памятник.",
+        "lat": 45.270, "lon": 36.960,
+        "photo": "21.jpg",
+        "info": (
+            "🏛 <b>Фанагория</b> — крупнейшая древнегреческая колония на территории России,\n"
+            "основанная в 543 году до н.э. Раскопки ведутся с 1936 года.\n"
+            "Обнаружены остатки храмов, виноделен и жилых кварталов."
+        )
+    },
+    {
+        "name": "Грязевой вулкан Карабетова гора",
+        "description": "Действующий грязевой вулкан с лечебной глиной.",
+        "lat": 45.200, "lon": 37.000,
+        "photo": "22.jpg",
+        "info": (
+            "🌋 <b>Карабетова гора</b> — один из крупнейших грязевых вулканов Тамани.\n"
+            "Высота около 150 м, извержения происходят каждые 10-15 лет.\n"
+            "Грязь используется в бальнеологических целях."
+        )
+    },
+    {
+        "name": "Памятник «Казакам-переселенцам»",
+        "description": "Монумент в честь основания казачьих станиц на Кубани.",
+        "lat": 44.920, "lon": 37.300,
+        "photo": "23.jpg",
+        "info": (
+            "🗿 <b>Памятник казакам</b> установлен в 2011 году.\n"
+            "Скульптор А. Скнарин изобразил казака с конём, олицетворяющего\n"
+            "переселение Черноморского казачьего войска в 1792 году."
+        )
+    },
+    {
+        "name": "Анапский археологический музей под открытым небом",
+        "description": "Остатки античного города Горгиппия на месте раскопок.",
+        "lat": 44.8960, "lon": 37.3150,
+        "photo": "24.jpg",
+        "info": (
+            "🏺 <b>Горгиппия</b> — античный город Боспорского царства (IV в. до н.э. – III в. н.э.).\n"
+            "Раскопки ведутся с 1940-х, открыты улицы, дома, винодельни и некрополь.\n"
+            "В 1977 году на этом месте создан музей-заповедник под открытым небом."
+        )
+    },
+    {
+        "name": "Скала «Парус»",
+        "description": "Одинокая скала в море, напоминающая парусник.",
+        "lat": 44.438, "lon": 38.230,
+        "photo": "25.jpg",
+        "info": (
+            "⛵ <b>Скала Парус</b> находится в районе посёлка Джанхот (близ Анапы).\n"
+            "Представляет собой вертикально стоящий пласт песчаника высотой 25 м.\n"
+            "По легенде, это окаменевший парусник греческих мореплавателей."
+        )
+    }
 ]
 
 # ===== СОСТОЯНИЯ =====
 class QuestState(StatesGroup):
-    current_idx = State()  # индекс активной локации (может быть None)
+    current_idx = State()
 
 # ===== РАБОТА С БД =====
 def db_execute(query, params=(), fetch=False):
@@ -120,13 +378,13 @@ def get_user_progress(user_id):
     return progress
 
 def get_user_stats(user_id):
-    """Собирает статистику и автоматически сбрасывает прогресс при полном завершении."""
+    """Собирает статистику и сбрасывает прогресс при полном завершении."""
     progress = get_user_progress(user_id)
     visited_count = sum(1 for v in progress.values() if v['visited'])
     skipped_count = sum(1 for v in progress.values() if v['skipped'])
     completed = visited_count == len(LOCATIONS)
     if completed:
-        # Сброс прогресса, чтобы можно было начать заново
+        # Сброс прогресса для возможности нового старта
         db_execute("DELETE FROM location_progress WHERE user_id = ?", (user_id,))
         progress = {}
         visited_count = 0
@@ -168,14 +426,14 @@ def mark_location(user_id, index, action='visited'):
         )
 
 def get_unvisited_locations(user_id):
-    """Возвращает индексы локаций, которые ещё не отмечены (ни visited, ни skipped)."""
+    """Возвращает индексы локаций, которые ещё не отмечены."""
     progress = get_user_progress(user_id)
     all_indices = set(range(len(LOCATIONS)))
     marked = set(progress.keys())
     return sorted(list(all_indices - marked))
 
 def get_skipped_locations(user_id):
-    """Возвращает индексы локаций, отмеченных как пропущенные (можно перепройти)."""
+    """Возвращает индексы локаций, отмеченных как пропущенные."""
     progress = get_user_progress(user_id)
     return [idx for idx, v in progress.items() if v['skipped']]
 
@@ -183,6 +441,7 @@ def get_skipped_locations(user_id):
 def get_main_menu_keyboard(user_id: int):
     builder = InlineKeyboardBuilder()
     stats = get_user_stats(user_id)
+    # Определяем состояние пользователя
     if stats['visited'] == 0 and stats['skipped'] == 0:
         builder.button(text="🚀 Начать маршрут", callback_data="start_quest")
     else:
@@ -192,10 +451,10 @@ def get_main_menu_keyboard(user_id: int):
         skipped = get_skipped_locations(user_id)
         if skipped:
             builder.button(text="🔄 Перепройти пропущенные", callback_data="retry_skipped")
-        builder.button(text="📊 Моя статистика", callback_data="my_stats")
+    builder.button(text="📊 Моя статистика", callback_data="my_stats")
     builder.button(text="ℹ️ О гиде", callback_data="about_quest")
     builder.button(text="🆘 Помощь", callback_data="help_info")
-    builder.adjust(1, 2, 1)
+    builder.adjust(2, 2, 1)  # в 2 столбца
     return builder.as_markup()
 
 def get_quest_keyboard():
@@ -207,7 +466,6 @@ def get_quest_keyboard():
     return builder.as_markup()
 
 def get_retry_skipped_keyboard(user_id):
-    """Клавиатура со списком пропущенных локаций."""
     skipped = get_skipped_locations(user_id)
     builder = InlineKeyboardBuilder()
     for idx in skipped:
@@ -227,11 +485,10 @@ def get_photo_path(location):
 def is_nearby(user_lat, user_lon, target_lat, target_lon):
     return geodesic((user_lat, user_lon), (target_lat, target_lon)).meters <= RADIUS_METERS
 
-async def send_location_with_photo(chat_id, index, state=None, prefix=""):
-    """Отправляет фото и описание локации по индексу."""
+async def send_location_with_photo(chat_id, index, prefix=""):
     loc = LOCATIONS[index]
     photo_path = get_photo_path(loc)
-    stats = get_user_stats(chat_id)  # используем chat_id как user_id
+    stats = get_user_stats(chat_id)
     progress_bar = "▓" * stats['visited'] + "░" * (len(LOCATIONS) - stats['visited'])
     caption = (f"{prefix}📍 <b>{loc['name']}</b> ({index+1}/{len(LOCATIONS)})\n"
                f"{loc['description']}\n\n"
@@ -245,9 +502,9 @@ async def send_location_with_photo(chat_id, index, state=None, prefix=""):
 async def send_location_info(chat_id, index):
     loc = LOCATIONS[index]
     if "info" in loc:
-        await bot.send_message(chat_id, f"📚 <b>Это интересно:</b>\n{loc['info']}", parse_mode="HTML")
+        await bot.send_message(chat_id, loc["info"], parse_mode="HTML")
 
-# ===== ОБРАБОТЧИКИ =====
+# ===== ОСНОВНЫЕ ОБРАБОТЧИКИ =====
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -271,7 +528,6 @@ async def main_menu(callback: types.CallbackQuery, state: FSMContext):
 @dp.callback_query(F.data == "start_quest")
 async def start_quest(callback: types.CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
-    # Сброс прогресса
     db_execute("DELETE FROM location_progress WHERE user_id = ?", (user_id,))
     await state.clear()
     unvisited = get_unvisited_locations(user_id)
@@ -328,7 +584,6 @@ async def retry_location(callback: types.CallbackQuery, state: FSMContext):
     if idx not in progress or not progress[idx]['skipped']:
         await callback.answer("Эту локацию нельзя перепройти.", show_alert=True)
         return
-    # Удаляем запись, чтобы локация снова стала доступной
     db_execute("DELETE FROM location_progress WHERE user_id = ? AND location_index = ?", (user_id, idx))
     await state.update_data(current_idx=idx)
     await callback.message.edit_text(f"Можете снова посетить «{LOCATIONS[idx]['name']}».\nОтправьте геопозицию, когда будете на месте.")
@@ -378,7 +633,6 @@ async def handle_location(message: types.Message, state: FSMContext):
     data = await state.get_data()
     current_idx = data.get("current_idx")
     if current_idx is None:
-        # Если нет активной, ищем первую непосещённую
         unvisited = get_unvisited_locations(user_id)
         if not unvisited:
             await message.answer("Все локации отмечены.")
@@ -429,7 +683,7 @@ async def handle_location(message: types.Message, state: FSMContext):
 async def my_stats(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     stats = get_user_stats(user_id)
-    text = (f"📊 <b>Ваша статистика</b>\n\n"
+    text = (f"📊 <b>Моя статистика</b>\n\n"
             f"📍 Всего локаций: {stats['total']}\n"
             f"✅ Посещено: {stats['visited']}\n"
             f"⏭ Пропущено: {stats['skipped']}\n"
@@ -442,9 +696,9 @@ async def my_stats(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "about_quest")
 async def about_quest(callback: types.CallbackQuery):
     text = ("ℹ️ <b>Гид-бот по Анапе</b>\n\n"
-            "Посещайте локации, отмечайте их геопозицией.\n"
-            "Пропущенные можно перепройти.\n"
-            "После завершения маршрута можно начать заново.")
+            "Посещайте интересные места, узнавайте их историю.\n"
+            "Маршрут включает 25 локаций по Анапе и окрестностям.\n"
+            "Пропущенные локации можно перепройти.")
     builder = InlineKeyboardBuilder()
     builder.button(text="🏠 Главное меню", callback_data="main_menu")
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
@@ -484,7 +738,7 @@ async def skip_cmd(message: types.Message, state: FSMContext):
         await state.update_data(current_idx=None)
         await message.answer("Все локации отмечены.")
 
-# ===== АДМИН-ПАНЕЛЬ (упрощённая) =====
+# ===== АДМИН-ПАНЕЛЬ =====
 async def show_admin_panel(target):
     builder = InlineKeyboardBuilder()
     builder.button(text="📊 Статистика", callback_data="admin_stats")
@@ -514,7 +768,6 @@ async def admin_back(callback: types.CallbackQuery):
     await show_admin_panel(callback)
     await callback.answer()
 
-# Заглушки для админ-кнопок
 @dp.callback_query(F.data == "admin_stats")
 async def admin_stats(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS: return
@@ -534,8 +787,7 @@ async def admin_users(callback: types.CallbackQuery):
         FROM users u
         LEFT JOIN location_progress lp ON u.user_id = lp.user_id AND lp.visited = 1
         GROUP BY u.user_id
-        ORDER BY cnt DESC
-        LIMIT 10
+        ORDER BY cnt DESC LIMIT 10
     """, fetch=True)
     text = "👥 Топ-10 игроков:\n\n"
     for username, first_name, cnt in top:
