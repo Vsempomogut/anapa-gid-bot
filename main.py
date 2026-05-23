@@ -17,12 +17,14 @@ from aiogram.types import FSInputFile, Message
 from geopy.distance import geodesic
 
 # Flask для веб-сервера (чтобы Render не засыпал)
-try:
-    from flask import Flask
-    FLASK_AVAILABLE = True
-except ImportError:
-    FLASK_AVAILABLE = False
-    print("⚠️ Flask не установлен. Веб-сервер не запущен.")
+from flask import Flask
+flask_app = Flask(__name__)
+@flask_app.route('/')
+def home():
+    return "Бот работает", 200
+def run_flask():
+    flask_app.run(host='0.0.0.0', port=10000)
+threading.Thread(target=run_flask, daemon=True).start()
 
 # ===== НАСТРОЙКИ =====
 TOKEN = "8966936854:AAEl_6PQgLLvKslZQCMLZciivcFQwDlSjPc"
