@@ -1,5 +1,4 @@
 aiogram>=3.0.0
 geopy>=2.3.0
 flask
-yookassa
-matplotlib>=3.7.0
+yookassa>=2.3.0
