@@ -30,8 +30,7 @@ RADIUS_METERS = 50
 ADMIN_IDS = [5196749531]            # замените на свои Telegram ID
 IMAGES_FOLDER = "images"
 
-# ЮKassa (настройки для оплаты, если включена)
-PAYMENT_ENABLED = True             # измените на True при готовности
+# ЮKassa (настройки для оплаты, если включена из админки)
 YOOKASSA_SHOP_ID = "ВАШ_SHOP_ID"
 YOOKASSA_SECRET_KEY = "ВАШ_СЕКРЕТНЫЙ_КЛЮЧ"
 
@@ -247,8 +246,7 @@ def register_user(user_id, username, first_name):
         db_execute("UPDATE users SET last_activity = ? WHERE user_id = ?", (datetime.now(), user_id))
 
 def is_payment_enabled():
-    if not PAYMENT_ENABLED:
-        return False
+    """Проверяет настройку оплаты в базе данных."""
     row = db_execute("SELECT value FROM settings WHERE key='payment_enabled'", fetch=True)
     return row[0][0] == '1' if row else False
 
@@ -668,10 +666,11 @@ async def my_stats(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "about_quest")
 async def about_quest(callback: types.CallbackQuery):
     price = get_price()
-    payment_status = "платно" if is_payment_enabled() else "бесплатно"
+    payment_status = "включён" if is_payment_enabled() else "отключён"
     text = (f"ℹ️ <b>Гид-бот по Анапе</b>\n\n"
             f"{get_locations_count()} локаций с историческими справками.\n"
             f"Режим оплаты: {payment_status}.\n"
+            f"Стоимость: {price:.0f}₽.\n"
             "Пропущенные можно перепройти.")
     builder = InlineKeyboardBuilder()
     builder.button(text="🏠 Главное меню", callback_data="main_menu")
@@ -1151,7 +1150,7 @@ async def remind_stuck(callback: types.CallbackQuery):
     await callback.answer(f"Отправлено {count} напоминаний.", show_alert=True)
 
 # ===== ПЛАТЕЖИ (если включена оплата) =====
-if PAYMENT_ENABLED:
+if is_payment_enabled():
     from yookassa import Configuration, Payment
 
     async def create_payment(user_id):
