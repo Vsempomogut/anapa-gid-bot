@@ -1,4 +1,4 @@
-# TOKEN = "8966936854:AAEl_6PQgLLvKslZQCMLZciivcFQwDlSjPc" 
+# TOKEN = "8675178726:AAE7rohE9sKI2Icv2c31yoxug6gNQeGeB1s" 
 # ADMIN_IDS = [5196749531] Telegram ID
 import asyncio
 import sqlite3
