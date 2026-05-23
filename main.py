@@ -1,4 +1,4 @@
-# TOKEN = "8675178726:AAHC6pdFilqFYHnSafY4hFQJxehH0FaUtD0" 
+# TOKEN = "8675178726:AAHnnPNuVVfI23wwWfEVEK_c0kZUhzALVhY" 
 # ADMIN_IDS = [5196749531] Telegram ID
 import asyncio
 import sqlite3
@@ -18,7 +18,7 @@ from geopy.distance import geodesic
 from flask import Flask
 
 # ===== НАСТРОЙКИ =====
-TOKEN = "8675178726:AAHC6pdFilqFYHnSafY4hFQJxehH0FaUtD0"   # ← замените на новый токен
+TOKEN = "8675178726:AAHnnPNuVVfI23wwWfEVEK_c0kZUhzALVhY"   # ← замените на новый токен
 RADIUS_METERS = 50
 ADMIN_IDS = [5196749531]            # замените на свои Telegram ID
 IMAGES_FOLDER = "images"
