@@ -43,17 +43,18 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 # ===== ВЕБ-СЕРВЕР =====
-if FLASK_AVAILABLE:
-    flask_app = Flask(__name__)
+from flask import Flask
 
-    @flask_app.route('/')
-    def home():
-        return "Бот работает", 200
+flask_app = Flask(__name__)
 
-    def run_flask():
-        flask_app.run(host='0.0.0.0', port=10000)
+@flask_app.route('/')
+def home():
+    return "Бот работает", 200
 
-    threading.Thread(target=run_flask, daemon=True).start()
+def run_flask():
+    flask_app.run(host='0.0.0.0', port=10000)
+
+threading.Thread(target=run_flask, daemon=True).start()
 
 # ===== БАЗА ДАННЫХ =====
 def init_db():
