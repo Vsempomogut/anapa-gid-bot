@@ -16,15 +16,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import FSInputFile, Message
 from geopy.distance import geodesic
 
-# Flask для веб-сервера (чтобы Render не засыпал)
+# Flask для веб-сервера (Render сам его поднимет)
 from flask import Flask
-flask_app = Flask(__name__)
-@flask_app.route('/')
-def home():
-    return "Бот работает", 200
-def run_flask():
-    flask_app.run(host='0.0.0.0', port=10000)
-threading.Thread(target=run_flask, daemon=True).start()
 
 # ===== НАСТРОЙКИ =====
 TOKEN = "8966936854:AAEl_6PQgLLvKslZQCMLZciivcFQwDlSjPc"
@@ -42,19 +35,12 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ===== ВЕБ-СЕРВЕР =====
-from flask import Flask
+# ===== СОЗДАЁМ FLASK-ПРИЛОЖЕНИЕ (Render ищет объект `app`) =====
+app = Flask(__name__)
 
-flask_app = Flask(__name__)
-
-@flask_app.route('/')
+@app.route('/')
 def home():
     return "Бот работает", 200
-
-def run_flask():
-    flask_app.run(host='0.0.0.0', port=10000)
-
-threading.Thread(target=run_flask, daemon=True).start()
 
 # ===== БАЗА ДАННЫХ =====
 def init_db():
