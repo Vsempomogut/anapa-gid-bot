@@ -31,7 +31,7 @@ ADMIN_IDS = [5196749531]            # замените на свои Telegram ID
 IMAGES_FOLDER = "images"
 
 # ЮKassa (настройки для оплаты, если включена)
-PAYMENT_ENABLED = False            # измените на True при готовности
+PAYMENT_ENABLED = True             # измените на True при готовности
 YOOKASSA_SHOP_ID = "ВАШ_SHOP_ID"
 YOOKASSA_SECRET_KEY = "ВАШ_СЕКРЕТНЫЙ_КЛЮЧ"
 
