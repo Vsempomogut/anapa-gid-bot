@@ -4,25 +4,26 @@ import asyncio
 import sqlite3
 import io
 import os
+import shutil
 from datetime import datetime, timedelta
 import logging
+import threading
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.types import FSInputFile
+from aiogram.types import FSInputFile, Message, ReplyKeyboardRemove
 from geopy.distance import geodesic
 
-# Попытка импорта matplotlib (необязательно)
+# Попытка импорта Flask для веб-сервера (чтобы Render не засыпал)
 try:
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    CHART_AVAILABLE = True
+    from flask import Flask
+    FLASK_AVAILABLE = True
 except ImportError:
-    CHART_AVAILABLE = False
+    FLASK_AVAILABLE = False
+    print("⚠️ Flask не установлен. Веб-сервер не запущен. Бот может засыпать на Render.")
 
 # ===== НАСТРОЙКИ =====
 TOKEN = "8966936854:AAEl_6PQgLLvKslZQCMLZciivcFQwDlSjPc"
@@ -30,8 +31,8 @@ RADIUS_METERS = 50
 ADMIN_IDS = [5196749531]            # замените на свои Telegram ID
 IMAGES_FOLDER = "images"
 
-# ЮKassa (будет использоваться только при включённом плате)
-YOOKASSA_SHOP_ID = "ВАШ_SHOP_ID"        # замените, если понадобится
+# ЮKassa (настройки для оплаты, если включена)
+YOOKASSA_SHOP_ID = "ВАШ_SHOP_ID"
 YOOKASSA_SECRET_KEY = "ВАШ_СЕКРЕТНЫЙ_КЛЮЧ"
 
 logging.basicConfig(level=logging.INFO)
@@ -40,10 +41,27 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
+# ===== ВЕБ-СЕРВЕР (Flask, если есть) =====
+if FLASK_AVAILABLE:
+    flask_app = Flask(__name__)
+
+    @flask_app.route('/')
+    def home():
+        return "Бот работает", 200
+
+    def run_flask():
+        flask_app.run(host='0.0.0.0', port=10000)
+
+    threading.Thread(target=run_flask, daemon=True).start()
+else:
+    flask_app = None
+
 # ===== БАЗА ДАННЫХ =====
 def init_db():
     conn = sqlite3.connect('quest.db')
     c = conn.cursor()
+
+    # Пользователи
     c.execute('''CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY,
         username TEXT,
@@ -51,6 +69,8 @@ def init_db():
         start_date TIMESTAMP,
         last_activity TIMESTAMP
     )''')
+
+    # Платежи
     c.execute('''CREATE TABLE IF NOT EXISTS payments (
         payment_id TEXT PRIMARY KEY,
         user_id INTEGER,
@@ -59,55 +79,146 @@ def init_db():
         created_at TIMESTAMP,
         completed_at TIMESTAMP
     )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS location_progress (
-        user_id INTEGER,
-        location_index INTEGER,
-        location_name TEXT,
-        visited INTEGER DEFAULT 0,
-        skipped INTEGER DEFAULT 0,
-        timestamp TIMESTAMP,
-        PRIMARY KEY (user_id, location_index)
-    )''')
-    # Таблица настроек
+
+    # Настройки
     c.execute('''CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT
     )''')
-    # Вставим значения по умолчанию, если их нет
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('payment_enabled', '0')")
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('price', '100')")
+
+    # Локации
+    c.execute('''CREATE TABLE IF NOT EXISTS locations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        info TEXT,
+        lat REAL,
+        lon REAL,
+        photo TEXT
+    )''')
+
+    # Если таблица пуста, добавляем стартовый набор (25 локаций)
+    c.execute("SELECT COUNT(*) FROM locations")
+    if c.fetchone()[0] == 0:
+        default_locations = [
+            ("Русские ворота", "Остатки турецкой крепости. Отправьте геопозицию, когда окажетесь рядом.",
+             "🏛 <b>Русские ворота</b> — памятник архитектуры XVIII века.\nПостроены в 1783 году как часть турецкой крепости Анапа.\nНазваны в честь 25-летия освобождения города от турок в 1828 году.\nАвтор проекта неизвестен, реставрация проводилась в 1950-х годах.",
+             44.8955, 37.3198, "1.jpg"),
+            ("Храм Святого Онуфрия Великого", "Старейший православный храм Анапы. Подойдите поближе.",
+             "⛪ <b>Храм Святого Онуфрия</b> построен в 1830 году.\nОсвящён в честь небесного покровителя города — святого Онуфрия.\nАрхитектор: предположительно И. К. Мальберг.\nХрам пережил Крымскую войну и советские гонения, возвращён верующим в 1990-х.",
+             44.8977, 37.3174, "2.jpg"),
+            ("Сквер имени Гудовича", "Уютный сквер с фонтаном в центре города. Отметьтесь здесь.",
+             "🌳 <b>Сквер Гудовича</b> назван в честь генерала Ивана Гудовича,\nкомандовавшего русскими войсками при взятии Анапы в 1791 году.\nБлагоустроен в 1960-х, фонтан установлен в 1985 году.",
+             44.8959, 37.3148, "3.jpg"),
+            ("Анапский краеведческий музей", "Богатая коллекция артефактов от античности до наших дней. Вход рядом.",
+             "🏺 <b>Краеведческий музей</b> основан в 1913 году.\nСодержит более 30 000 экспонатов: античные амфоры, турецкое оружие,\nпредметы быта казаков. Здание построено в стиле модерн в 1909 году.",
+             44.8961, 37.3167, "4.jpg"),
+            ("Цветомузыкальный фонтан на набережной", "Светомузыкальное шоу на центральной набережной. Найдите фонтаны.",
+             "💦 <b>Цветомузыкальный фонтан</b> открыт в 2014 году.\nВечерние представления под музыку собирают сотни зрителей.\nФонтан состоит из 120 струй, подсвечиваемых RGB-светильниками.",
+             44.8936, 37.3170, "5.jpg"),
+            ("Памятник «Отдыхающий»", "Забавная скульптура отдыхающего в гамаке на набережной.",
+             "😂 <b>Памятник отдыхающему</b> установлен в 2004 году.\nСкульптор: Александр Аполлонов.\nСтал одним из символов курортной Анапы, популярен для фото.",
+             44.8933, 37.3162, "6.jpg"),
+            ("Памятник «Белая шляпа»", "Огромная белая шляпа – дань курортной моде. Сделайте фото.",
+             "👒 <b>Белая шляпа</b> — арт-объект, установленный в 2010 году.\nДиаметр шляпы около 3 метров, весит более тонны.\nСимволизирует защиту от солнца и лёгкость отпуска.",
+             44.8921, 37.3150, "7.jpg"),
+            ("Парк 30-летия Победы", "Главный городской парк с аттракционами и аллеями.",
+             "🌲 <b>Парк 30-летия Победы</b> разбит в 1975 году.\nЗанимает площадь около 20 гектаров.\nЗдесь установлен Вечный огонь и памятник воинам-освободителям.",
+             44.8941, 37.3135, "8.jpg"),
+            ("Арка Центрального пляжа", "Знаменитая арка, ведущая к главному песчаному пляжу.",
+             "🏖 <b>Арка Центрального пляжа</b> построена в 1956 году по проекту\nархитектора В. П. Соколова. Мозаичное панно на арке изображает\nморские мотивы и является визитной карточкой курорта.",
+             44.8905, 37.3127, "9.jpg"),
+            ("Лермонтовская беседка", "Место, где любил бывать Михаил Лермонтов. Панорамный вид на море.",
+             "📜 <b>Лермонтовская беседка</b> сооружена в 1900-х годах на месте,\nгде по преданию поэт любовался морем во время ссылки на Кавказ.\nОтсюда открывается вид на Анапскую бухту и мыс Утриш.",
+             44.8917, 37.3082, "10.jpg"),
+            ("Анапский маяк", "Действующий маяк на высоком обрывистом берегу.",
+             "🔦 <b>Анапский маяк</b> построен в 1898 году.\nВысота башни 21 м, свет виден на 18 миль.\nКонструкция: французская оптика Френеля, капитальный ремонт в 2003 г.",
+             44.8869, 37.2990, "11.jpg"),
+            ("Смотровая площадка «Ласточкино гнездо»", "Потрясающий обзор побережья со скалы.",
+             "🌅 <b>Смотровая площадка</b> обустроена в 1970-х годах.\nНазвание получила из-за сходства с крымским Ласточкиным гнездом.\nВ ясную погоду видно от мыса Утриш до косы Чушка.",
+             44.8878, 37.3005, "12.jpg"),
+            ("Дельфинарий на Пионерском проспекте", "Яркие представления с дельфинами и морскими котиками.",
+             "🐬 <b>Анапский дельфинарий</b> открыт в 1992 году.\nВмещает до 500 зрителей, представления идут с мая по сентябрь.\nПомимо дельфинов, выступают белухи и морские львы.",
+             44.8790, 37.2935, "13.jpg"),
+            ("Аквапарк «Золотой пляж»", "Один из крупнейших аквапарков России с десятками горок.",
+             "🌊 <b>Аквапарк «Золотой пляж»</b> работает с 2006 года.\nБолее 25 горок, бассейн с искусственной волной, детский городок.\nРасположен прямо у берега Чёрного моря.",
+             44.8840, 37.2975, "14.jpg"),
+            ("Кипарисовое озеро", "Живописное озеро среди кипарисов – рай для фотографов.",
+             "🌲 <b>Кипарисовое озеро</b> — искусственный водоём, созданный в 1980-х.\nОкружён болотными кипарисами, занесёнными в Красную книгу.\nПопулярно для снимков на фоне отражения деревьев в воде.",
+             44.910, 37.350, "15.jpg"),
+            ("Долина Сукко", "Можжевеловые леса и целебный воздух в долине реки Сукко.",
+             "🌿 <b>Долина Сукко</b> известна реликтовыми можжевельниками возрастом до 600 лет.\nЗдесь снимались фильмы «Кавказская пленница» и «Формула любви».\nНаходится на территории заказника «Большой Утриш».",
+             44.790, 37.370, "16.jpg"),
+            ("Заповедник «Большой Утриш»", "Дикие пляжи, скалы и уникальная природа заповедника.",
+             "🏞 <b>Большой Утриш</b> — государственный природный заповедник с 2010 года.\nВключает реликтовые фисташково-можжевеловые леса и морские гроты.\nОбитают черепахи Никольского и средиземноморские сколопендры.",
+             44.750, 37.380, "17.jpg"),
+            ("Станица Варваровка", "Тихая станица, окружённая виноградниками и холмами.",
+             "🍇 <b>Варваровка</b> основана в 1862 году как казачья станица.\nМестные винодельни производят сорта «Саперави» и «Рислинг».\nВ окрестностях находится древнее городище Горгиппия (III в. до н.э.).",
+             44.840, 37.370, "18.jpg"),
+            ("Благовещенская коса", "Узкая песчаная коса между Чёрным морем и лиманами.",
+             "🏄 <b>Благовещенская</b> — посёлок на косе длиной 12 км.\nИдеальное место для кайтинга, виндсёрфинга и пляжного отдыха.\nЛиманы Кизилташский и Витязевский богаты лечебными грязями.",
+             44.960, 37.280, "19.jpg"),
+            ("Винодельня «Шато Тамань»", "Современное винодельческое хозяйство с дегустационным залом.",
+             "🍷 <b>Шато Тамань</b> открыто в 2006 году на Таманском полуострове.\nПроизводит премиальные вина из местного винограда.\nАрхитектура здания напоминает французские замки.",
+             45.150, 36.710, "20.jpg"),
+            ("Крепость Фанагория", "Руины античного города и крепости, археологический памятник.",
+             "🏛 <b>Фанагория</b> — крупнейшая древнегреческая колония на территории России,\nоснованная в 543 году до н.э. Раскопки ведутся с 1936 года.\nОбнаружены остатки храмов, виноделен и жилых кварталов.",
+             45.270, 36.960, "21.jpg"),
+            ("Грязевой вулкан Карабетова гора", "Действующий грязевой вулкан с лечебной глиной.",
+             "🌋 <b>Карабетова гора</b> — один из крупнейших грязевых вулканов Тамани.\nВысота около 150 м, извержения происходят каждые 10-15 лет.\nГрязь используется в бальнеологических целях.",
+             45.200, 37.000, "22.jpg"),
+            ("Памятник «Казакам-переселенцам»", "Монумент в честь основания казачьих станиц на Кубани.",
+             "🗿 <b>Памятник казакам</b> установлен в 2011 году.\nСкульптор А. Скнарин изобразил казака с конём, олицетворяющего\nпереселение Черноморского казачьего войска в 1792 году.",
+             44.920, 37.300, "23.jpg"),
+            ("Анапский археологический музей под открытым небом", "Остатки античного города Горгиппия на месте раскопок.",
+             "🏺 <b>Горгиппия</b> — античный город Боспорского царства (IV в. до н.э. – III в. н.э.).\nРаскопки ведутся с 1940-х, открыты улицы, дома, винодельни и некрополь.\nВ 1977 году на этом месте создан музей-заповедник под открытым небом.",
+             44.8960, 37.3150, "24.jpg"),
+            ("Скала «Парус»", "Одинокая скала в море, напоминающая парусник.",
+             "⛵ <b>Скала Парус</b> находится в районе посёлка Джанхот (близ Анапы).\nПредставляет собой вертикально стоящий пласт песчаника высотой 25 м.\nПо легенде, это окаменевший парусник греческих мореплавателей.",
+             44.438, 38.230, "25.jpg")
+        ]
+        c.executemany(
+            "INSERT INTO locations (name, description, info, lat, lon, photo) VALUES (?, ?, ?, ?, ?, ?)",
+            default_locations
+        )
+
+    # Прогресс пользователей
+    c.execute('''CREATE TABLE IF NOT EXISTS location_progress (
+        user_id INTEGER,
+        location_id INTEGER,
+        location_name TEXT,
+        visited INTEGER DEFAULT 0,
+        skipped INTEGER DEFAULT 0,
+        timestamp TIMESTAMP,
+        PRIMARY KEY (user_id, location_id)
+    )''')
+
     conn.commit()
     conn.close()
 
 init_db()
 
-# ===== СПИСОК ЛОКАЦИЙ (25) =====
-LOCATIONS = [
-    {
-        "name": "Русские ворота",
-        "description": "Остатки турецкой крепости. Отправьте геопозицию, когда окажетесь рядом.",
-        "lat": 44.8955, "lon": 37.3198,
-        "photo": "1.jpg",
-        "info": (
-            "🏛 <b>Русские ворота</b> — памятник архитектуры XVIII века.\n"
-            "Построены в 1783 году как часть турецкой крепости Анапа.\n"
-            "Названы в честь 25-летия освобождения города от турок в 1828 году.\n"
-            "Автор проекта неизвестен, реставрация проводилась в 1950-х годах."
-        )
-    },
-    # --- Остальные 24 локации скопированы из предыдущего полного ответа ---
-    # (для краткости опускаю, но они должны быть точно такими же, как в коде выше)
-]
-
-# ===== СОСТОЯНИЯ =====
+# ===== FSM состояния =====
 class QuestState(StatesGroup):
-    current_idx = State()
+    current_idx = State()  # location_id активной локации
 
-# Для админского диалога изменения цены
-class AdminState(StatesGroup):
+class AdminAddLocation(StatesGroup):
+    waiting_for_name = State()
+    waiting_for_description = State()
+    waiting_for_info = State()
+    waiting_for_lat = State()
+    waiting_for_lon = State()
+    waiting_for_photo = State()
+
+class AdminChangePrice(StatesGroup):
     waiting_for_price = State()
 
-# ===== РАБОТА С БД =====
+class UserSupportMessage(StatesGroup):
+    waiting_for_message = State()
+
+# ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
 def db_execute(query, params=(), fetch=False):
     conn = sqlite3.connect('quest.db')
     c = conn.cursor()
@@ -132,8 +243,7 @@ def is_payment_enabled():
     return row[0][0] == '1' if row else False
 
 def set_payment_enabled(enabled: bool):
-    value = '1' if enabled else '0'
-    db_execute("UPDATE settings SET value=? WHERE key='payment_enabled'", (value,))
+    db_execute("UPDATE settings SET value=? WHERE key='payment_enabled'", ('1' if enabled else '0',))
 
 def get_price():
     row = db_execute("SELECT value FROM settings WHERE key='price'", fetch=True)
@@ -151,21 +261,55 @@ def is_user_paid(user_id):
     )
     return bool(row)
 
+def get_location(loc_id):
+    row = db_execute("SELECT id, name, description, info, lat, lon, photo FROM locations WHERE id=?", (loc_id,), fetch=True)
+    if row:
+        return {
+            "id": row[0][0], "name": row[0][1], "description": row[0][2],
+            "info": row[0][3], "lat": row[0][4], "lon": row[0][5], "photo": row[0][6]
+        }
+    return None
+
+def get_all_location_ids():
+    rows = db_execute("SELECT id FROM locations ORDER BY id", fetch=True)
+    return [r[0] for r in rows]
+
+def get_locations_count():
+    row = db_execute("SELECT COUNT(*) FROM locations", fetch=True)
+    return row[0][0]
+
+def add_location(name, description, info, lat, lon, photo_filename):
+    db_execute(
+        "INSERT INTO locations (name, description, info, lat, lon, photo) VALUES (?, ?, ?, ?, ?, ?)",
+        (name, description, info, lat, lon, photo_filename)
+    )
+    return db_execute("SELECT last_insert_rowid()", fetch=True)[0][0]
+
+def delete_location(loc_id):
+    db_execute("DELETE FROM location_progress WHERE location_id=?", (loc_id,))
+    loc = get_location(loc_id)
+    if loc and loc['photo']:
+        photo_path = os.path.join(IMAGES_FOLDER, loc['photo'])
+        if os.path.isfile(photo_path):
+            os.remove(photo_path)
+    db_execute("DELETE FROM locations WHERE id=?", (loc_id,))
+
 def get_user_progress(user_id):
     rows = db_execute(
-        "SELECT location_index, visited, skipped FROM location_progress WHERE user_id = ?",
+        "SELECT location_id, visited, skipped FROM location_progress WHERE user_id = ?",
         (user_id,), fetch=True
     )
     progress = {}
-    for idx, visited, skipped in rows:
-        progress[idx] = {'visited': bool(visited), 'skipped': bool(skipped)}
+    for loc_id, visited, skipped in rows:
+        progress[loc_id] = {'visited': bool(visited), 'skipped': bool(skipped)}
     return progress
 
 def get_user_stats(user_id):
     progress = get_user_progress(user_id)
+    total = get_locations_count()
     visited_count = sum(1 for v in progress.values() if v['visited'])
     skipped_count = sum(1 for v in progress.values() if v['skipped'])
-    completed = visited_count == len(LOCATIONS)
+    completed = visited_count == total
     if completed:
         db_execute("DELETE FROM location_progress WHERE user_id = ?", (user_id,))
         progress = {}
@@ -175,52 +319,96 @@ def get_user_stats(user_id):
     return {
         "visited": visited_count,
         "skipped": skipped_count,
-        "total": len(LOCATIONS),
+        "total": total,
         "completed": completed,
-        "progress_percent": round(visited_count / len(LOCATIONS) * 100, 1) if visited_count else 0,
+        "progress_percent": round(visited_count / total * 100, 1) if visited_count else 0,
         "progress": progress
     }
 
-def mark_location(user_id, index, action='visited'):
+def mark_location(user_id, loc_id, action='visited'):
     existing = db_execute(
-        "SELECT visited, skipped FROM location_progress WHERE user_id = ? AND location_index = ?",
-        (user_id, index), fetch=True
+        "SELECT visited, skipped FROM location_progress WHERE user_id = ? AND location_id = ?",
+        (user_id, loc_id), fetch=True
     )
+    name = get_location(loc_id)["name"]
     if existing:
         if action == 'visited':
             db_execute(
-                "UPDATE location_progress SET visited = 1, skipped = 0, timestamp = ? WHERE user_id = ? AND location_index = ?",
-                (datetime.now(), user_id, index)
+                "UPDATE location_progress SET visited = 1, skipped = 0, timestamp = ? WHERE user_id = ? AND location_id = ?",
+                (datetime.now(), user_id, loc_id)
             )
         else:
             db_execute(
-                "UPDATE location_progress SET skipped = 1, visited = 0, timestamp = ? WHERE user_id = ? AND location_index = ?",
-                (datetime.now(), user_id, index)
+                "UPDATE location_progress SET skipped = 1, visited = 0, timestamp = ? WHERE user_id = ? AND location_id = ?",
+                (datetime.now(), user_id, loc_id)
             )
     else:
         db_execute(
-            "INSERT INTO location_progress (user_id, location_index, location_name, visited, skipped, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-            (user_id, index, LOCATIONS[index]["name"],
-             1 if action == 'visited' else 0,
-             1 if action == 'skipped' else 0,
-             datetime.now())
+            "INSERT INTO location_progress (user_id, location_id, location_name, visited, skipped, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, loc_id, name, 1 if action == 'visited' else 0, 1 if action == 'skipped' else 0, datetime.now())
         )
 
 def get_unvisited_locations(user_id):
     progress = get_user_progress(user_id)
-    all_indices = set(range(len(LOCATIONS)))
+    all_ids = set(get_all_location_ids())
     marked = set(progress.keys())
-    return sorted(list(all_indices - marked))
+    return sorted(list(all_ids - marked))
 
 def get_skipped_locations(user_id):
     progress = get_user_progress(user_id)
-    return [idx for idx, v in progress.items() if v['skipped']]
+    return [loc_id for loc_id, v in progress.items() if v['skipped']]
+
+def is_nearby(user_lat, user_lon, target_lat, target_lon):
+    return geodesic((user_lat, user_lon), (target_lat, target_lon)).meters <= RADIUS_METERS
+
+def get_photo_path(loc):
+    if loc and loc.get("photo"):
+        path = os.path.join(IMAGES_FOLDER, loc["photo"])
+        if os.path.isfile(path):
+            return path
+    return None
+
+async def send_location_with_photo(chat_id, loc_id, prefix=""):
+    loc = get_location(loc_id)
+    if not loc:
+        await bot.send_message(chat_id, "Локация не найдена.")
+        return
+    photo_path = get_photo_path(loc)
+    total = get_locations_count()
+    stats = get_user_stats(chat_id)
+    progress_bar = "▓" * stats['visited'] + "░" * (total - stats['visited'])
+    # Расстояние до следующей
+    distance_text = ""
+    all_ids = get_all_location_ids()
+    if loc_id in all_ids:
+        idx = all_ids.index(loc_id)
+        if idx + 1 < len(all_ids):
+            next_loc = get_location(all_ids[idx + 1])
+            if next_loc:
+                dist_m = geodesic((loc["lat"], loc["lon"]), (next_loc["lat"], next_loc["lon"])).meters
+                if dist_m >= 1000:
+                    distance_text = f"\n📏 До следующей: {dist_m/1000:.1f} км"
+                else:
+                    steps = int(dist_m / 0.75)
+                    distance_text = f"\n📏 До следующей: {int(dist_m)} м (~{steps} шагов)"
+    caption = (f"{prefix}📍 <b>{loc['name']}</b> ({loc_id}/{total})\n"
+               f"{loc['description']}{distance_text}\n\n"
+               f"Прогресс: {progress_bar} ({stats['visited']}/{total})\n\n"
+               f"Нажмите «📍 Я на месте» или отправьте геопозицию.")
+    if photo_path:
+        await bot.send_photo(chat_id, FSInputFile(photo_path), caption=caption, parse_mode="HTML", reply_markup=get_quest_keyboard())
+    else:
+        await bot.send_message(chat_id, caption, parse_mode="HTML", reply_markup=get_quest_keyboard())
+
+async def send_location_info(chat_id, loc_id):
+    loc = get_location(loc_id)
+    if loc and loc["info"]:
+        await bot.send_message(chat_id, loc["info"], parse_mode="HTML")
 
 # ===== КЛАВИАТУРЫ =====
 def get_main_menu_keyboard(user_id: int):
     builder = InlineKeyboardBuilder()
     if not is_user_paid(user_id):
-        # Платный режим, пользователь не оплатил
         price = get_price()
         builder.button(text=f"💳 Оплатить доступ ({price:.0f}₽)", callback_data="pay_access")
     else:
@@ -231,9 +419,11 @@ def get_main_menu_keyboard(user_id: int):
             unvisited = get_unvisited_locations(user_id)
             if unvisited:
                 builder.button(text="📍 Продолжить маршрут", callback_data="continue_quest")
-            skipped = get_skipped_locations(user_id)
-            if skipped:
-                builder.button(text="🔄 Перепройти пропущенные", callback_data="retry_skipped")
+            else:
+                builder.button(text="🔄 Начать заново", callback_data="start_quest")
+        skipped = get_skipped_locations(user_id)
+        if skipped:
+            builder.button(text="🔄 Перепройти пропущенные", callback_data="retry_skipped")
         builder.button(text="📊 Моя статистика", callback_data="my_stats")
     builder.button(text="ℹ️ О гиде", callback_data="about_quest")
     builder.button(text="🆘 Помощь", callback_data="help_info")
@@ -242,63 +432,566 @@ def get_main_menu_keyboard(user_id: int):
 
 def get_quest_keyboard():
     builder = InlineKeyboardBuilder()
+    builder.button(text="📍 Я на месте", callback_data="confirm_location")
     builder.button(text="⏭ Пропустить", callback_data="skip_location")
     builder.button(text="📊 Статистика", callback_data="my_stats")
     builder.button(text="🏠 Главное меню", callback_data="main_menu")
-    builder.adjust(2, 1)
+    builder.adjust(2, 2)
     return builder.as_markup()
 
 def get_retry_skipped_keyboard(user_id):
     skipped = get_skipped_locations(user_id)
     builder = InlineKeyboardBuilder()
-    for idx in skipped:
-        loc = LOCATIONS[idx]
-        builder.button(text=loc["name"], callback_data=f"retry_{idx}")
+    for loc_id in skipped:
+        loc = get_location(loc_id)
+        builder.button(text=loc["name"], callback_data=f"retry_{loc_id}")
     builder.button(text="🔙 Назад", callback_data="main_menu")
     builder.adjust(1)
     return builder.as_markup()
 
-def get_photo_path(location):
-    if "photo" in location:
-        path = os.path.join(IMAGES_FOLDER, location["photo"])
-        if os.path.isfile(path):
-            return path
-    return None
+# ===== ОБРАБОТЧИКИ КОМАНД =====
+@dp.message(Command("start"))
+async def start_cmd(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    register_user(user_id, message.from_user.username, message.from_user.first_name)
+    await message.answer(
+        "🏙 <b>Гид-бот по Анапе</b>\n\nВыберите действие:",
+        parse_mode="HTML",
+        reply_markup=get_main_menu_keyboard(user_id)
+    )
 
-def is_nearby(user_lat, user_lon, target_lat, target_lon):
-    return geodesic((user_lat, user_lon), (target_lat, target_lon)).meters <= RADIUS_METERS
+@dp.callback_query(F.data == "main_menu")
+async def main_menu(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    await callback.message.edit_text("🏙 <b>Главное меню</b>", parse_mode="HTML", reply_markup=get_main_menu_keyboard(user_id))
+    await callback.answer()
 
-async def send_location_with_photo(chat_id, index, prefix=""):
-    loc = LOCATIONS[index]
-    photo_path = get_photo_path(loc)
-    stats = get_user_stats(chat_id)
-    progress_bar = "▓" * stats['visited'] + "░" * (len(LOCATIONS) - stats['visited'])
-
-    distance_text = ""
-    if index + 1 < len(LOCATIONS):
-        next_loc = LOCATIONS[index + 1]
-        dist_m = geodesic((loc["lat"], loc["lon"]), (next_loc["lat"], next_loc["lon"])).meters
-        if dist_m >= 1000:
-            distance_text = f"\n📏 До следующей: {dist_m/1000:.1f} км"
-        else:
-            steps = int(dist_m / 0.75)
-            distance_text = f"\n📏 До следующей: {int(dist_m)} м (~{steps} шагов)"
-
-    caption = (f"{prefix}📍 <b>{loc['name']}</b> ({index+1}/{len(LOCATIONS)})\n"
-               f"{loc['description']}{distance_text}\n\n"
-               f"Прогресс: {progress_bar} ({stats['visited']}/{len(LOCATIONS)})\n"
-               f"Отправьте геопозицию или используйте кнопки.")
-    if photo_path:
-        await bot.send_photo(chat_id, FSInputFile(photo_path), caption=caption, parse_mode="HTML", reply_markup=get_quest_keyboard())
+@dp.callback_query(F.data == "start_quest")
+async def start_quest(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    if not is_user_paid(user_id):
+        await callback.answer("Сначала оплатите доступ!", show_alert=True)
+        return
+    db_execute("DELETE FROM location_progress WHERE user_id = ?", (user_id,))
+    await state.clear()
+    unvisited = get_unvisited_locations(user_id)
+    if unvisited:
+        first_id = unvisited[0]
+        await state.update_data(current_idx=first_id)
+        await send_location_with_photo(callback.message.chat.id, first_id, prefix="🚀 Поехали!\n")
+        await callback.message.edit_text("Маршрут начат!")
     else:
-        await bot.send_message(chat_id, caption, parse_mode="HTML", reply_markup=get_quest_keyboard())
+        await callback.message.edit_text("Все локации уже посещены, но вы можете перепройти пропущенные.")
+    await callback.answer()
 
-async def send_location_info(chat_id, index):
-    loc = LOCATIONS[index]
-    if "info" in loc:
-        await bot.send_message(chat_id, loc["info"], parse_mode="HTML")
+@dp.callback_query(F.data == "continue_quest")
+async def continue_quest(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    if not is_user_paid(user_id):
+        await callback.answer("Сначала оплатите доступ!", show_alert=True)
+        return
+    unvisited = get_unvisited_locations(user_id)
+    if unvisited:
+        next_id = unvisited[0]
+        await state.update_data(current_idx=next_id)
+        await send_location_with_photo(callback.message.chat.id, next_id)
+        await callback.message.edit_text("📍 Продолжаем!")
+    else:
+        skipped = get_skipped_locations(user_id)
+        if skipped:
+            await callback.message.edit_text(
+                "Все локации отмечены, но вы можете перепройти пропущенные.",
+                reply_markup=get_retry_skipped_keyboard(user_id)
+            )
+        else:
+            await callback.message.edit_text(
+                "🎉 Поздравляем! Все локации посещены!\nИспользуйте /start для нового захода.",
+                reply_markup=get_main_menu_keyboard(user_id)
+            )
+    await callback.answer()
 
-# ===== ПЛАТЁЖНЫЕ ОБРАБОТЧИКИ (при включённой оплате) =====
+@dp.callback_query(F.data == "retry_skipped")
+async def retry_skipped_menu(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    if not is_user_paid(user_id):
+        await callback.answer("Сначала оплатите доступ!", show_alert=True)
+        return
+    skipped = get_skipped_locations(user_id)
+    if not skipped:
+        await callback.answer("Нет пропущенных локаций.", show_alert=True)
+        return
+    await callback.message.edit_text("🔄 Выберите локацию:", reply_markup=get_retry_skipped_keyboard(user_id))
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("retry_"))
+async def retry_location(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    if not is_user_paid(user_id):
+        await callback.answer("Сначала оплатите доступ!", show_alert=True)
+        return
+    loc_id = int(callback.data.split("_")[1])
+    progress = get_user_progress(user_id)
+    if loc_id not in progress or not progress[loc_id]['skipped']:
+        await callback.answer("Эту локацию нельзя перепройти.", show_alert=True)
+        return
+    db_execute("DELETE FROM location_progress WHERE user_id = ? AND location_id = ?", (user_id, loc_id))
+    await state.update_data(current_idx=loc_id)
+    await callback.message.edit_text(f"Можете снова посетить «{get_location(loc_id)['name']}».")
+    await send_location_with_photo(callback.message.chat.id, loc_id)
+    await callback.answer()
+
+@dp.callback_query(F.data == "confirm_location")
+async def confirm_location_button(callback: types.CallbackQuery, state: FSMContext):
+    """Кнопка 'Я на месте' – просим отправить геопозицию."""
+    await callback.answer("Отправьте вашу геопозицию для подтверждения.", show_alert=False)
+    await callback.message.answer("📍 Пожалуйста, отправьте вашу геопозицию (📎 > Геопозиция).")
+    await callback.answer()
+
+@dp.callback_query(F.data == "skip_location")
+async def skip_location(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    if not is_user_paid(user_id):
+        await callback.answer("Сначала оплатите доступ!", show_alert=True)
+        return
+    data = await state.get_data()
+    current_id = data.get("current_idx")
+    if current_id is None:
+        await callback.answer("Нечего пропускать.", show_alert=True)
+        return
+    progress = get_user_progress(user_id)
+    if current_id in progress:
+        await callback.answer("Эта локация уже отмечена.", show_alert=True)
+        return
+    mark_location(user_id, current_id, 'skipped')
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer(f"⏭ «{get_location(current_id)['name']}» пропущена.")
+    unvisited = get_unvisited_locations(user_id)
+    if unvisited:
+        next_id = unvisited[0]
+        await state.update_data(current_idx=next_id)
+        await send_location_with_photo(callback.message.chat.id, next_id)
+    else:
+        await state.update_data(current_idx=None)
+        skipped = get_skipped_locations(user_id)
+        if skipped:
+            await callback.message.answer("Все локации отмечены. Можете перепройти пропущенные.", reply_markup=get_retry_skipped_keyboard(user_id))
+        else:
+            await callback.message.answer("🎉 Все локации посещены! Маршрут завершён.", reply_markup=get_main_menu_keyboard(user_id))
+    await callback.answer()
+
+@dp.message(F.location)
+async def handle_location(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    register_user(user_id, message.from_user.username, message.from_user.first_name)
+    if not is_user_paid(user_id):
+        await message.answer("❌ Доступ платный. Нажмите /start и оплатите.")
+        return
+
+    data = await state.get_data()
+    current_id = data.get("current_idx")
+    if current_id is None:
+        unvisited = get_unvisited_locations(user_id)
+        if not unvisited:
+            await message.answer("Все локации отмечены.")
+            return
+        current_id = unvisited[0]
+        await state.update_data(current_idx=current_id)
+
+    loc = get_location(current_id)
+    if not loc:
+        await message.answer("Локация не найдена.")
+        return
+    progress = get_user_progress(user_id)
+    if current_id in progress:
+        await message.answer("Эта локация уже отмечена. Ищем следующую...")
+        unvisited = get_unvisited_locations(user_id)
+        if unvisited:
+            current_id = unvisited[0]
+            await state.update_data(current_idx=current_id)
+            loc = get_location(current_id)
+        else:
+            await message.answer("Все локации отмечены.")
+            return
+
+    if is_nearby(message.location.latitude, message.location.longitude, loc["lat"], loc["lon"]):
+        await message.answer(f"✅ «{loc['name']}» пройдена!")
+        mark_location(user_id, current_id, 'visited')
+        await send_location_info(message.chat.id, current_id)
+        unvisited = get_unvisited_locations(user_id)
+        if unvisited:
+            next_id = unvisited[0]
+            await state.update_data(current_idx=next_id)
+            await send_location_with_photo(message.chat.id, next_id)
+        else:
+            await state.update_data(current_idx=None)
+            skipped = get_skipped_locations(user_id)
+            if skipped:
+                await message.answer("Все локации отмечены. Можете перепройти пропущенные.", reply_markup=get_retry_skipped_keyboard(user_id))
+            else:
+                await message.answer("🏆 Вы посетили все локации! Маршрут завершён.\n/start для нового захода.", reply_markup=get_main_menu_keyboard(user_id))
+    else:
+        dist = geodesic((message.location.latitude, message.location.longitude), (loc["lat"], loc["lon"])).meters
+        await message.answer(f"❌ До «{loc['name']}» ещё {dist:.0f} м.", reply_markup=get_quest_keyboard())
+
+# Статистика и информация
+@dp.callback_query(F.data == "my_stats")
+async def my_stats(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    if not is_user_paid(user_id):
+        await callback.answer("Сначала оплатите доступ!", show_alert=True)
+        return
+    stats = get_user_stats(user_id)
+    text = (f"📊 <b>Моя статистика</b>\n\n"
+            f"📍 Всего локаций: {stats['total']}\n"
+            f"✅ Посещено: {stats['visited']}\n"
+            f"⏭ Пропущено: {stats['skipped']}\n"
+            f"Прогресс: {stats['progress_percent']}%")
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🏠 Главное меню", callback_data="main_menu")
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.answer()
+
+@dp.callback_query(F.data == "about_quest")
+async def about_quest(callback: types.CallbackQuery):
+    price = get_price()
+    payment_status = "включён" if is_payment_enabled() else "отключён"
+    text = (f"ℹ️ <b>Гид-бот по Анапе</b>\n\n"
+            f"{get_locations_count()} локаций с историческими справками.\n"
+            f"Режим оплаты: {payment_status}.\n"
+            f"Стоимость: {price:.0f}₽.\n"
+            "Пропущенные можно перепройти.")
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🏠 Главное меню", callback_data="main_menu")
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.answer()
+
+@dp.callback_query(F.data == "help_info")
+async def help_info(callback: types.CallbackQuery, state: FSMContext):
+    # Переводим в режим отправки сообщения админу
+    await callback.message.edit_text(
+        "📝 <b>Обратная связь</b>\n\n"
+        "Опишите ваш вопрос или предложение, и администраторы получат ваше сообщение.\n"
+        "Для отмены нажмите /start.",
+        parse_mode="HTML"
+    )
+    await state.set_state(UserSupportMessage.waiting_for_message)
+    await callback.answer()
+
+@dp.message(StateFilter(UserSupportMessage.waiting_for_message))
+async def process_support_message(message: Message, state: FSMContext):
+    user = message.from_user
+    text = message.text
+    # Пересылаем админам
+    for admin_id in ADMIN_IDS:
+        try:
+            await bot.send_message(
+                admin_id,
+                f"📩 <b>Сообщение от пользователя</b>\n"
+                f"ID: {user.id}\n"
+                f"Имя: {user.first_name} {user.last_name or ''}\n"
+                f"Username: @{user.username or 'нет'}\n\n"
+                f"Текст: {text}",
+                parse_mode="HTML"
+            )
+        except:
+            pass
+    await message.answer("✅ Ваше сообщение отправлено администраторам. Спасибо!")
+    await state.clear()
+    await start_cmd(message, state)
+
+# ===== АДМИН-ПАНЕЛЬ =====
+async def show_admin_panel(target):
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📊 Статистика", callback_data="admin_stats_menu")
+    builder.button(text="👥 Пользователи", callback_data="admin_users_info")
+    builder.button(text="📍 Управление локациями", callback_data="admin_locations_menu")
+    builder.button(text="💰 Управление оплатой", callback_data="admin_payment_settings")
+    builder.button(text="🔔 Напомнить", callback_data="admin_remind_stuck")
+    builder.adjust(2, 2, 1)
+    if isinstance(target, types.Message):
+        await target.answer("🔐 <b>Админ-панель</b>", parse_mode="HTML", reply_markup=builder.as_markup())
+    else:
+        await target.message.edit_text("🔐 <b>Админ-панель</b>", parse_mode="HTML", reply_markup=builder.as_markup())
+
+@dp.message(Command("admin"))
+async def admin_panel(message: types.Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ Доступ запрещён!")
+        return
+    await show_admin_panel(message)
+
+@dp.callback_query(F.data == "admin_back")
+async def admin_back(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("⛔ Доступ запрещён!", show_alert=True)
+        return
+    await show_admin_panel(callback)
+    await callback.answer()
+
+# --- Статистика по периодам ---
+@dp.callback_query(F.data == "admin_stats_menu")
+async def admin_stats_menu(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📅 За день", callback_data="admin_stats_day")
+    builder.button(text="📅 За неделю", callback_data="admin_stats_week")
+    builder.button(text="📅 За месяц", callback_data="admin_stats_month")
+    builder.button(text="📅 Всё время", callback_data="admin_stats_all")
+    builder.button(text="🔙 Назад", callback_data="admin_back")
+    builder.adjust(2, 2, 1)
+    await callback.message.edit_text("📊 <b>Статистика</b> – выберите период:", parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.answer()
+
+async def show_period_stats(callback, period):
+    now = datetime.now()
+    if period == "day":
+        since = now - timedelta(days=1)
+    elif period == "week":
+        since = now - timedelta(weeks=1)
+    elif period == "month":
+        since = now - timedelta(days=30)
+    else:
+        since = datetime(2000, 1, 1)
+
+    total_users = db_execute("SELECT COUNT(*) FROM users WHERE start_date >= ?", (since,), fetch=True)[0][0]
+    active_users = db_execute("SELECT COUNT(DISTINCT user_id) FROM location_progress WHERE timestamp >= ?", (since,), fetch=True)[0][0]
+    completed_users = db_execute("SELECT COUNT(DISTINCT user_id) FROM location_progress WHERE visited = 1 AND timestamp >= ?", (since,), fetch=True)[0][0]
+
+    text = (f"📊 <b>Статистика за {period}</b>\n\n"
+            f"👥 Новых пользователей: {total_users}\n"
+            f"🎮 Активных (отмечались): {active_users}\n"
+            f"🏆 Посетили локации: {completed_users}")
+
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardBuilder().button(text="🔙 Назад", callback_data="admin_stats_menu").as_markup())
+    await callback.answer()
+
+@dp.callback_query(F.data == "admin_stats_day")
+async def admin_stats_day(callback: types.CallbackQuery):
+    await show_period_stats(callback, "day")
+
+@dp.callback_query(F.data == "admin_stats_week")
+async def admin_stats_week(callback: types.CallbackQuery):
+    await show_period_stats(callback, "week")
+
+@dp.callback_query(F.data == "admin_stats_month")
+async def admin_stats_month(callback: types.CallbackQuery):
+    await show_period_stats(callback, "month")
+
+@dp.callback_query(F.data == "admin_stats_all")
+async def admin_stats_all(callback: types.CallbackQuery):
+    await show_period_stats(callback, "all")
+
+# --- Пользователи ---
+@dp.callback_query(F.data == "admin_users_info")
+async def admin_users_info(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    now = datetime.now()
+    total_users = db_execute("SELECT COUNT(*) FROM users", fetch=True)[0][0]
+    active_now = db_execute("SELECT COUNT(DISTINCT user_id) FROM location_progress WHERE timestamp >= ?", (now - timedelta(hours=1),), fetch=True)[0][0]
+    completed = db_execute("SELECT COUNT(DISTINCT user_id) FROM location_progress WHERE visited = 1", fetch=True)[0][0]
+    on_route = db_execute("SELECT COUNT(DISTINCT user_id) FROM location_progress WHERE visited = 0 AND skipped = 0", fetch=True)[0][0]
+    text = (f"👥 <b>Пользователи</b>\n\n"
+            f"Всего в боте: {total_users}\n"
+            f"На маршруте: {on_route}\n"
+            f"Завершили: {completed}\n"
+            f"Активны сейчас (последний час): {active_now}")
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="admin_back")
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.answer()
+
+# --- Управление локациями (добавление, удаление, список) ---
+@dp.callback_query(F.data == "admin_locations_menu")
+async def admin_locations_menu(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    builder = InlineKeyboardBuilder()
+    builder.button(text="➕ Добавить локацию", callback_data="admin_add_location")
+    builder.button(text="📋 Список локаций", callback_data="admin_list_locations")
+    builder.button(text="❌ Удалить локацию", callback_data="admin_delete_location")
+    builder.button(text="🔙 Назад", callback_data="admin_back")
+    builder.adjust(1)
+    await callback.message.edit_text("📍 <b>Управление локациями</b>", parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.answer()
+
+# Добавление локации – пошаговый ввод
+@dp.callback_query(F.data == "admin_add_location")
+async def admin_add_location_start(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS: return
+    await state.set_state(AdminAddLocation.waiting_for_name)
+    await callback.message.edit_text("Введите <b>название</b> локации:", parse_mode="HTML")
+    await callback.answer()
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_name))
+async def process_name(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    await state.update_data(name=message.text)
+    await state.set_state(AdminAddLocation.waiting_for_description)
+    await message.answer("Введите <b>краткое описание</b> (для карточки):", parse_mode="HTML")
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_description))
+async def process_description(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    await state.update_data(description=message.text)
+    await state.set_state(AdminAddLocation.waiting_for_info)
+    await message.answer("Введите <b>подробную историческую справку</b> (info):", parse_mode="HTML")
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_info))
+async def process_info(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    await state.update_data(info=message.text)
+    await state.set_state(AdminAddLocation.waiting_for_lat)
+    await message.answer("Введите <b>широту</b> (lat), например 44.8955:", parse_mode="HTML")
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_lat))
+async def process_lat(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    try:
+        lat = float(message.text.replace(',', '.'))
+        await state.update_data(lat=lat)
+        await state.set_state(AdminAddLocation.waiting_for_lon)
+        await message.answer("Введите <b>долготу</b> (lon), например 37.3198:", parse_mode="HTML")
+    except ValueError:
+        await message.answer("❌ Введите число. Пример: 44.8955")
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_lon))
+async def process_lon(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    try:
+        lon = float(message.text.replace(',', '.'))
+        await state.update_data(lon=lon)
+        await state.set_state(AdminAddLocation.waiting_for_photo)
+        await message.answer("📷 Отправьте <b>фотографию</b> локации (сжатое изображение).", parse_mode="HTML")
+    except ValueError:
+        await message.answer("❌ Введите число. Пример: 37.3198")
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_photo), F.photo)
+async def process_photo(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    data = await state.get_data()
+    # Вставляем локацию без фото, чтобы получить id
+    loc_id = add_location(data['name'], data['description'], data['info'], data['lat'], data['lon'], "")
+    new_filename = f"loc_{loc_id}.jpg"
+    dest_path = os.path.join(IMAGES_FOLDER, new_filename)
+    await bot.download(message.photo[-1], destination=dest_path)
+    db_execute("UPDATE locations SET photo=? WHERE id=?", (new_filename, loc_id))
+    await state.clear()
+    await message.answer(f"✅ Локация «{data['name']}» добавлена с ID {loc_id}.")
+    await show_admin_panel(message)
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_photo))
+async def process_photo_invalid(message: Message):
+    if message.from_user.id not in ADMIN_IDS: return
+    await message.answer("Пожалуйста, отправьте именно фотографию (не документ).")
+
+# Удаление локации
+@dp.callback_query(F.data == "admin_delete_location")
+async def admin_delete_location_start(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    all_ids = get_all_location_ids()
+    builder = InlineKeyboardBuilder()
+    for loc_id in all_ids:
+        loc = get_location(loc_id)
+        builder.button(text=f"❌ {loc['name']}", callback_data=f"confirm_delete_{loc_id}")
+    builder.button(text="🔙 Назад", callback_data="admin_locations_menu")
+    builder.adjust(1)
+    await callback.message.edit_text("Выберите локацию для удаления:", reply_markup=builder.as_markup())
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("confirm_delete_"))
+async def confirm_delete_location(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    loc_id = int(callback.data.split("_")[2])
+    loc = get_location(loc_id)
+    if not loc:
+        await callback.answer("Локация не найдена.", show_alert=True)
+        return
+    delete_location(loc_id)
+    await callback.answer(f"Локация «{loc['name']}» удалена.", show_alert=True)
+    await admin_locations_menu(callback)
+
+# Список локаций
+@dp.callback_query(F.data == "admin_list_locations")
+async def admin_list_locations(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    all_ids = get_all_location_ids()
+    if not all_ids:
+        await callback.message.edit_text("Нет ни одной локации.", reply_markup=InlineKeyboardBuilder().button(text="🔙 Назад", callback_data="admin_locations_menu").as_markup())
+        await callback.answer()
+        return
+    text = "📍 <b>Список локаций:</b>\n\n"
+    for loc_id in all_ids:
+        loc = get_location(loc_id)
+        text += f"ID {loc_id}: {loc['name']}\n"
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="admin_locations_menu")
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.answer()
+
+# --- Управление оплатой ---
+@dp.callback_query(F.data == "admin_payment_settings")
+async def admin_payment_settings(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    enabled = is_payment_enabled()
+    price = get_price()
+    status_text = "✅ Включена" if enabled else "❌ Отключена"
+    text = f"💰 <b>Настройки оплаты</b>\n\nСтатус: {status_text}\nТекущая цена: {price:.0f}₽"
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔄 Переключить (вкл/выкл)", callback_data="admin_toggle_payment")
+    builder.button(text="💵 Изменить цену", callback_data="admin_change_price")
+    builder.button(text="🔙 Назад", callback_data="admin_back")
+    builder.adjust(1)
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.answer()
+
+@dp.callback_query(F.data == "admin_toggle_payment")
+async def admin_toggle_payment(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    set_payment_enabled(not is_payment_enabled())
+    await admin_payment_settings(callback)
+
+@dp.callback_query(F.data == "admin_change_price")
+async def admin_change_price(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS: return
+    await state.set_state(AdminChangePrice.waiting_for_price)
+    await callback.message.edit_text("Введите новую цену (целое число):")
+    await callback.answer()
+
+@dp.message(StateFilter(AdminChangePrice.waiting_for_price))
+async def process_new_price(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+    try:
+        new_price = float(message.text)
+        if new_price <= 0:
+            raise ValueError
+        set_price(new_price)
+        await message.answer(f"✅ Цена изменена на {new_price:.0f}₽")
+    except ValueError:
+        await message.answer("❌ Введите положительное число.")
+    finally:
+        await state.clear()
+    await show_admin_panel(message)
+
+# --- Напоминания ---
+@dp.callback_query(F.data == "admin_remind_stuck")
+async def remind_stuck(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    threshold = datetime.now() - timedelta(hours=24)
+    stuck = db_execute(
+        "SELECT user_id FROM users WHERE last_activity < ? AND user_id IN (SELECT user_id FROM location_progress)",
+        (threshold,), fetch=True
+    )
+    count = 0
+    for (uid,) in stuck:
+        try:
+            await bot.send_message(uid, "⏰ Вы давно не заходили в гид! Продолжите исследование.")
+            count += 1
+        except:
+            pass
+    await callback.answer(f"Отправлено {count} напоминаний.", show_alert=True)
+
+# ===== ПЛАТЕЖИ (заглушка, если оплата включена) =====
 async def create_payment(user_id):
     import uuid
     from yookassa import Configuration, Payment
@@ -308,10 +1001,7 @@ async def create_payment(user_id):
     idempotence_key = str(uuid.uuid4())
     price = get_price()
     payment = Payment.create({
-        "amount": {
-            "value": f"{price:.2f}",
-            "currency": "RUB"
-        },
+        "amount": {"value": f"{price:.2f}", "currency": "RUB"},
         "confirmation": {
             "type": "redirect",
             "return_url": f"https://t.me/{(await bot.get_me()).username}"
@@ -320,7 +1010,6 @@ async def create_payment(user_id):
         "description": f"Доступ к гиду по Анапе (пользователь {user_id})",
         "metadata": {"user_id": user_id}
     }, idempotence_key)
-
     db_execute("INSERT INTO payments (payment_id, user_id, amount, status, created_at) VALUES (?, ?, ?, 'pending', ?)",
                (payment.id, user_id, price, datetime.now()))
     return payment.id, payment.confirmation.confirmation_url
@@ -350,8 +1039,7 @@ async def pay_access(callback: types.CallbackQuery):
         await callback.message.edit_text(
             f"💳 <b>Оплата доступа</b>\n\nСтоимость: {get_price():.0f}₽\n\n"
             "После оплаты нажмите «Проверить оплату».",
-            parse_mode="HTML",
-            reply_markup=builder.as_markup()
+            parse_mode="HTML", reply_markup=builder.as_markup()
         )
     except Exception as e:
         logger.error(f"Ошибка создания платежа: {e}")
@@ -367,7 +1055,7 @@ async def process_payment_check(callback: types.CallbackQuery, state: FSMContext
             db_execute("UPDATE payments SET status='succeeded', completed_at=? WHERE payment_id=?",
                        (datetime.now(), payment_id))
             await callback.message.edit_text("✅ Оплата прошла успешно!")
-            await main_menu(callback, state)  # обновим меню
+            await main_menu(callback, state)
         elif status == "pending":
             await callback.answer("⏳ Платёж ещё не завершён. Попробуйте позже.", show_alert=True)
         else:
@@ -377,417 +1065,7 @@ async def process_payment_check(callback: types.CallbackQuery, state: FSMContext
         await callback.answer("⚠️ Не удалось проверить платёж.", show_alert=True)
     await callback.answer()
 
-# ===== ОСНОВНЫЕ ОБРАБОТЧИКИ =====
-@dp.message(Command("start"))
-async def start_cmd(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    register_user(user_id, message.from_user.username, message.from_user.first_name)
-    await message.answer(
-        "🏙 <b>Гид-бот по Анапе</b>\n\nВыберите действие:",
-        parse_mode="HTML",
-        reply_markup=get_main_menu_keyboard(user_id)
-    )
-
-@dp.callback_query(F.data == "main_menu")
-async def main_menu(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-    await callback.message.edit_text(
-        "🏙 <b>Главное меню</b>",
-        parse_mode="HTML",
-        reply_markup=get_main_menu_keyboard(user_id)
-    )
-    await callback.answer()
-
-@dp.callback_query(F.data == "start_quest")
-async def start_quest(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-    if not is_user_paid(user_id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    db_execute("DELETE FROM location_progress WHERE user_id = ?", (user_id,))
-    await state.clear()
-    unvisited = get_unvisited_locations(user_id)
-    if unvisited:
-        first_idx = unvisited[0]
-        await state.update_data(current_idx=first_idx)
-        await send_location_with_photo(callback.message.chat.id, first_idx, prefix="🚀 Поехали!\n")
-        await callback.message.edit_text("Начинаем маршрут!")
-    else:
-        await callback.message.edit_text("Все локации уже посещены, но вы можете перепройти пропущенные.")
-    await callback.answer()
-
-@dp.callback_query(F.data == "continue_quest")
-async def continue_quest(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-    if not is_user_paid(user_id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    unvisited = get_unvisited_locations(user_id)
-    if unvisited:
-        next_idx = unvisited[0]
-        await state.update_data(current_idx=next_idx)
-        await send_location_with_photo(callback.message.chat.id, next_idx)
-        await callback.message.edit_text("📍 Продолжаем!")
-    else:
-        skipped = get_skipped_locations(user_id)
-        if skipped:
-            await callback.message.edit_text(
-                "Все локации отмечены, но вы можете перепройти пропущенные.",
-                reply_markup=get_retry_skipped_keyboard(user_id)
-            )
-        else:
-            await callback.message.edit_text(
-                "🎉 Поздравляем! Все локации посещены!\nИспользуйте /start для нового захода.",
-                reply_markup=get_main_menu_keyboard(user_id)
-            )
-    await callback.answer()
-
-@dp.callback_query(F.data == "retry_skipped")
-async def retry_skipped_menu(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    if not is_user_paid(user_id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    skipped = get_skipped_locations(user_id)
-    if not skipped:
-        await callback.answer("Нет пропущенных локаций.", show_alert=True)
-        return
-    await callback.message.edit_text(
-        "🔄 Выберите локацию для повторного прохождения:",
-        reply_markup=get_retry_skipped_keyboard(user_id)
-    )
-    await callback.answer()
-
-@dp.callback_query(F.data.startswith("retry_"))
-async def retry_location(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-    if not is_user_paid(user_id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    idx = int(callback.data.split("_")[1])
-    progress = get_user_progress(user_id)
-    if idx not in progress or not progress[idx]['skipped']:
-        await callback.answer("Эту локацию нельзя перепройти.", show_alert=True)
-        return
-    db_execute("DELETE FROM location_progress WHERE user_id = ? AND location_index = ?", (user_id, idx))
-    await state.update_data(current_idx=idx)
-    await callback.message.edit_text(f"Можете снова посетить «{LOCATIONS[idx]['name']}».\nОтправьте геопозицию, когда будете на месте.")
-    await send_location_with_photo(callback.message.chat.id, idx)
-    await callback.answer()
-
-@dp.callback_query(F.data == "skip_location")
-async def skip_location(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-    if not is_user_paid(user_id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    data = await state.get_data()
-    current_idx = data.get("current_idx")
-    if current_idx is None:
-        await callback.answer("Нечего пропускать.", show_alert=True)
-        return
-    progress = get_user_progress(user_id)
-    if current_idx in progress:
-        await callback.answer("Эта локация уже отмечена.", show_alert=True)
-        return
-    mark_location(user_id, current_idx, 'skipped')
-    await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.message.answer(f"⏭ «{LOCATIONS[current_idx]['name']}» пропущена.")
-    unvisited = get_unvisited_locations(user_id)
-    if unvisited:
-        next_idx = unvisited[0]
-        await state.update_data(current_idx=next_idx)
-        await send_location_with_photo(callback.message.chat.id, next_idx)
-    else:
-        await state.update_data(current_idx=None)
-        skipped = get_skipped_locations(user_id)
-        if skipped:
-            await callback.message.answer(
-                "Все локации отмечены. Можете перепройти пропущенные.",
-                reply_markup=get_retry_skipped_keyboard(user_id)
-            )
-        else:
-            await callback.message.answer(
-                "🎉 Вы посетили все локации! Маршрут завершён.\n/start для нового захода.",
-                reply_markup=get_main_menu_keyboard(user_id)
-            )
-    await callback.answer()
-
-@dp.message(F.location)
-async def handle_location(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    register_user(user_id, message.from_user.username, message.from_user.first_name)
-    if not is_user_paid(user_id):
-        await message.answer("❌ Доступ платный. Нажмите /start и оплатите.")
-        return
-
-    data = await state.get_data()
-    current_idx = data.get("current_idx")
-    if current_idx is None:
-        unvisited = get_unvisited_locations(user_id)
-        if not unvisited:
-            await message.answer("Все локации отмечены.")
-            return
-        current_idx = unvisited[0]
-        await state.update_data(current_idx=current_idx)
-
-    loc = LOCATIONS[current_idx]
-    progress = get_user_progress(user_id)
-    if current_idx in progress:
-        await message.answer("Эта локация уже отмечена. Ищем следующую...")
-        unvisited = get_unvisited_locations(user_id)
-        if unvisited:
-            current_idx = unvisited[0]
-            await state.update_data(current_idx=current_idx)
-            loc = LOCATIONS[current_idx]
-        else:
-            await message.answer("Все локации отмечены.")
-            return
-
-    if is_nearby(message.location.latitude, message.location.longitude, loc["lat"], loc["lon"]):
-        await message.answer(f"✅ «{loc['name']}» пройдена!")
-        mark_location(user_id, current_idx, 'visited')
-        await send_location_info(message.chat.id, current_idx)
-        unvisited = get_unvisited_locations(user_id)
-        if unvisited:
-            next_idx = unvisited[0]
-            await state.update_data(current_idx=next_idx)
-            await send_location_with_photo(message.chat.id, next_idx)
-        else:
-            await state.update_data(current_idx=None)
-            skipped = get_skipped_locations(user_id)
-            if skipped:
-                await message.answer(
-                    "Все локации отмечены. Можете перепройти пропущенные.",
-                    reply_markup=get_retry_skipped_keyboard(user_id)
-                )
-            else:
-                await message.answer(
-                    "🏆 Вы посетили все локации! Маршрут завершён.\n/start для нового захода.",
-                    reply_markup=get_main_menu_keyboard(user_id)
-                )
-    else:
-        dist = geodesic((message.location.latitude, message.location.longitude), (loc["lat"], loc["lon"])).meters
-        await message.answer(f"❌ До «{loc['name']}» ещё {dist:.0f} м.", reply_markup=get_quest_keyboard())
-
-@dp.callback_query(F.data == "my_stats")
-async def my_stats(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    if not is_user_paid(user_id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    stats = get_user_stats(user_id)
-    text = (f"📊 <b>Моя статистика</b>\n\n"
-            f"📍 Всего локаций: {stats['total']}\n"
-            f"✅ Посещено: {stats['visited']}\n"
-            f"⏭ Пропущено: {stats['skipped']}\n"
-            f"Прогресс: {stats['progress_percent']}%")
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🏠 Главное меню", callback_data="main_menu")
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
-    await callback.answer()
-
-@dp.callback_query(F.data == "about_quest")
-async def about_quest(callback: types.CallbackQuery):
-    price = get_price()
-    payment_status = "включён" if is_payment_enabled() else "отключён"
-    text = (f"ℹ️ <b>Гид-бот по Анапе</b>\n\n"
-            f"25 локаций с историческими справками.\n"
-            f"Режим оплаты: {payment_status}.\n"
-            f"Стоимость: {price:.0f}₽.\n"
-            "Пропущенные можно перепройти.")
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🏠 Главное меню", callback_data="main_menu")
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
-    await callback.answer()
-
-@dp.callback_query(F.data == "help_info")
-async def help_info(callback: types.CallbackQuery):
-    text = ("🆘 <b>Помощь</b>\n\n"
-            "/start – главное меню\n"
-            "/skip – пропустить текущую локацию\n\n"
-            "Для отметки локации отправьте геопозицию (📎 > Геопозиция).")
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🏠 Главное меню", callback_data="main_menu")
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
-    await callback.answer()
-
-@dp.message(Command("skip"))
-async def skip_cmd(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    if not is_user_paid(user_id):
-        await message.answer("❌ Сначала оплатите доступ.")
-        return
-    data = await state.get_data()
-    current_idx = data.get("current_idx")
-    if current_idx is None:
-        await message.answer("Нечего пропускать.")
-        return
-    progress = get_user_progress(user_id)
-    if current_idx in progress:
-        await message.answer("Эта локация уже отмечена.")
-        return
-    mark_location(user_id, current_idx, 'skipped')
-    await message.answer(f"⏭ «{LOCATIONS[current_idx]['name']}» пропущена.")
-    unvisited = get_unvisited_locations(user_id)
-    if unvisited:
-        next_idx = unvisited[0]
-        await state.update_data(current_idx=next_idx)
-        await send_location_with_photo(message.chat.id, next_idx)
-    else:
-        await state.update_data(current_idx=None)
-        await message.answer("Все локации отмечены.")
-
-# ===== АДМИН-ПАНЕЛЬ =====
-async def show_admin_panel(target):
-    builder = InlineKeyboardBuilder()
-    builder.button(text="📊 Статистика", callback_data="admin_stats")
-    builder.button(text="👥 Пользователи", callback_data="admin_users")
-    builder.button(text="📍 Локации", callback_data="admin_locations")
-    builder.button(text="🔔 Напомнить", callback_data="admin_remind_stuck")
-    builder.button(text="💰 Управление оплатой", callback_data="admin_payment_settings")
-    if CHART_AVAILABLE:
-        builder.button(text="📈 График", callback_data="admin_chart")
-    builder.adjust(2, 2, 2)
-    if isinstance(target, types.Message):
-        await target.answer("🔐 <b>Админ-панель</b>", parse_mode="HTML", reply_markup=builder.as_markup())
-    else:
-        await target.message.edit_text("🔐 <b>Админ-панель</b>", parse_mode="HTML", reply_markup=builder.as_markup())
-
-@dp.message(Command("admin"))
-async def admin_panel(message: types.Message):
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("⛔ Доступ запрещён!")
-        return
-    await show_admin_panel(message)
-
-@dp.callback_query(F.data == "admin_back")
-async def admin_back(callback: types.CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS:
-        await callback.answer("⛔ Доступ запрещён!", show_alert=True)
-        return
-    await show_admin_panel(callback)
-    await callback.answer()
-
-# === Управление оплатой ===
-@dp.callback_query(F.data == "admin_payment_settings")
-async def admin_payment_settings(callback: types.CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS: return
-    enabled = is_payment_enabled()
-    price = get_price()
-    status_text = "✅ Включена" if enabled else "❌ Отключена"
-    text = f"💰 <b>Настройки оплаты</b>\n\nСтатус: {status_text}\nТекущая цена: {price:.0f}₽"
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🔄 Переключить (вкл/выкл)", callback_data="admin_toggle_payment")
-    builder.button(text="💵 Изменить цену", callback_data="admin_change_price")
-    builder.button(text="🔙 Назад", callback_data="admin_back")
-    builder.adjust(1)
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
-    await callback.answer()
-
-@dp.callback_query(F.data == "admin_toggle_payment")
-async def admin_toggle_payment(callback: types.CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS: return
-    new_state = not is_payment_enabled()
-    set_payment_enabled(new_state)
-    await admin_payment_settings(callback)
-
-@dp.callback_query(F.data == "admin_change_price")
-async def admin_change_price(callback: types.CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in ADMIN_IDS: return
-    await state.set_state(AdminState.waiting_for_price)
-    await callback.message.edit_text("Введите новую цену (целое число):")
-    await callback.answer()
-
-@dp.message(AdminState.waiting_for_price)
-async def process_new_price(message: types.Message, state: FSMContext):
-    if message.from_user.id not in ADMIN_IDS:
-        await state.clear()
-        return
-    try:
-        new_price = float(message.text)
-        if new_price <= 0:
-            raise ValueError
-        set_price(new_price)
-        await message.answer(f"✅ Цена изменена на {new_price:.0f}₽")
-    except ValueError:
-        await message.answer("❌ Введите положительное число.")
-    finally:
-        await state.clear()
-    await show_admin_panel(message)
-
-# === Статистика ===
-@dp.callback_query(F.data == "admin_stats")
-async def admin_stats(callback: types.CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS: return
-    total_users = db_execute("SELECT COUNT(*) FROM users", fetch=True)[0][0]
-    active = db_execute("SELECT COUNT(DISTINCT user_id) FROM location_progress", fetch=True)[0][0]
-    completed = db_execute("SELECT COUNT(DISTINCT user_id) FROM location_progress WHERE visited=1 AND location_index=?", (len(LOCATIONS)-1,), fetch=True)[0][0]
-    text = (f"📊 <b>Общая статистика</b>\n\n"
-            f"👥 Пользователей: {total_users}\n"
-            f"🎮 Активных (хоть одно действие): {active}\n"
-            f"🏆 Завершили маршрут: {completed}")
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🔙 Назад", callback_data="admin_back")
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
-    await callback.answer()
-
-@dp.callback_query(F.data == "admin_users")
-async def admin_users(callback: types.CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS: return
-    top = db_execute("""
-        SELECT u.username, u.first_name, COUNT(lp.visited)
-        FROM users u
-        LEFT JOIN location_progress lp ON u.user_id = lp.user_id AND lp.visited = 1
-        GROUP BY u.user_id
-        ORDER BY COUNT(lp.visited) DESC
-        LIMIT 10
-    """, fetch=True)
-    text = "👥 <b>Топ-10 игроков:</b>\n\n" + "\n".join(
-        [f"{(r[0] or r[1] or 'Игрок')} – {r[2]} локаций" for r in top]
-    )
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🔙 Назад", callback_data="admin_back")
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
-    await callback.answer()
-
-@dp.callback_query(F.data == "admin_locations")
-async def admin_locations(callback: types.CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS: return
-    stats = []
-    for i, loc in enumerate(LOCATIONS):
-        visited = db_execute("SELECT COUNT(*) FROM location_progress WHERE location_index=? AND visited=1", (i,), fetch=True)[0][0]
-        skipped = db_execute("SELECT COUNT(*) FROM location_progress WHERE location_index=? AND skipped=1", (i,), fetch=True)[0][0]
-        stats.append(f"{loc['name']}: ✅{visited} ⏭{skipped}")
-    text = "📍 <b>Посещаемость локаций:</b>\n\n" + "\n".join(stats)
-    if len(text) > 4000:
-        parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
-        for part in parts:
-            await callback.message.answer(part, parse_mode="HTML")
-        await callback.message.edit_text("📍 Статистика отправлена частями.")
-    else:
-        builder = InlineKeyboardBuilder()
-        builder.button(text="🔙 Назад", callback_data="admin_back")
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
-    await callback.answer()
-
-@dp.callback_query(F.data == "admin_remind_stuck")
-async def remind_stuck(callback: types.CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS: return
-    threshold = datetime.now() - timedelta(hours=24)
-    stuck = db_execute(
-        "SELECT user_id FROM users WHERE last_activity < ? AND user_id IN (SELECT user_id FROM location_progress)",
-        (threshold,), fetch=True
-    )
-    count = 0
-    for (uid,) in stuck:
-        try:
-            await bot.send_message(uid, "⏰ Вы давно не заходили в гид! Продолжите исследование.")
-            count += 1
-        except:
-            pass
-    await callback.answer(f"Отправлено {count} напоминаний.", show_alert=True)
-
+# ===== ЗАПУСК =====
 async def main():
     print("Бот гида запущен")
     await dp.start_polling(bot)
