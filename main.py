@@ -668,11 +668,10 @@ async def my_stats(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "about_quest")
 async def about_quest(callback: types.CallbackQuery):
     price = get_price()
-    payment_status = "включён" if is_payment_enabled() else "отключён"
+    payment_status = "платно" if is_payment_enabled() else "бесплатно"
     text = (f"ℹ️ <b>Гид-бот по Анапе</b>\n\n"
             f"{get_locations_count()} локаций с историческими справками.\n"
             f"Режим оплаты: {payment_status}.\n"
-            f"Стоимость: {price:.0f}₽.\n"
             "Пропущенные можно перепройти.")
     builder = InlineKeyboardBuilder()
     builder.button(text="🏠 Главное меню", callback_data="main_menu")
