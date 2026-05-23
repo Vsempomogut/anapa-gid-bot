@@ -6,7 +6,7 @@ import io
 import os
 from datetime import datetime, timedelta
 import logging
-import threading
+import sys
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
@@ -15,12 +15,10 @@ from aiogram.filters import Command, StateFilter
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import FSInputFile, Message
 from geopy.distance import geodesic
-
-# Flask для веб-сервера (Render сам его поднимет)
 from flask import Flask
 
 # ===== НАСТРОЙКИ =====
-TOKEN = "8675178726:AAE7rohE9sKI2Icv2c31yoxug6gNQeGeB1s"
+TOKEN = "8675178726:AAE7rohE9sKI2Icv2c31yoxug6gNQeGeB1s"   # ← замените на новый токен
 RADIUS_METERS = 50
 ADMIN_IDS = [5196749531]            # замените на свои Telegram ID
 IMAGES_FOLDER = "images"
@@ -35,7 +33,7 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ===== СОЗДАЁМ FLASK-ПРИЛОЖЕНИЕ (Render ищет объект `app`) =====
+# ===== Flask-приложение (Render сам поднимет его на порту 10000) =====
 app = Flask(__name__)
 
 @app.route('/')
@@ -81,7 +79,7 @@ def init_db():
         photo TEXT
     )''')
 
-    # Заполняем стартовый набор из 25 локаций, если таблица пуста
+    # Стартовый набор из 25 локаций, если таблица пуста
     c.execute("SELECT COUNT(*) FROM locations")
     if c.fetchone()[0] == 0:
         default_locations = [
@@ -189,7 +187,7 @@ def init_db():
 
 init_db()
 
-# ===== СОСТОЯНИЯ FSM =====
+# ===== FSM =====
 class QuestState(StatesGroup):
     current_idx = State()
 
@@ -235,7 +233,6 @@ def register_user(user_id, username, first_name):
         db_execute("UPDATE users SET last_activity = ? WHERE user_id = ?", (datetime.now(), user_id))
 
 def is_payment_enabled():
-    """Проверяет настройку оплаты в базе данных."""
     row = db_execute("SELECT value FROM settings WHERE key='payment_enabled'", fetch=True)
     return row[0][0] == '1' if row else False
 
@@ -452,7 +449,7 @@ def get_retry_skipped_keyboard(user_id):
     builder.adjust(1)
     return builder.as_markup()
 
-# ===== ОБРАБОТЧИКИ КОМАНД =====
+# ===== ОБРАБОТЧИКИ =====
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -1221,6 +1218,7 @@ async def main():
         await dp.start_polling(bot)
     except Exception as e:
         print(f"Ошибка: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     asyncio.run(main())
