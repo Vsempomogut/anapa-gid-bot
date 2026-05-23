@@ -4,6 +4,7 @@ import asyncio
 import sqlite3
 import io
 import os
+import threading
 from datetime import datetime, timedelta
 import logging
 import sys
@@ -33,12 +34,17 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ===== Flask-приложение (Render сам поднимет его на порту 10000) =====
+# ===== FLASK В ОТДЕЛЬНОМ ПОТОКЕ (чтобы Render сразу видел порт) =====
 app = Flask(__name__)
 
 @app.route('/')
 def home():
     return "Бот работает", 200
+
+def run_flask():
+    app.run(host='0.0.0.0', port=10000)
+
+threading.Thread(target=run_flask, daemon=True).start()
 
 # ===== БАЗА ДАННЫХ =====
 def init_db():
