@@ -166,7 +166,11 @@ def init_db():
              44.8960, 37.3150, "24.jpg", "attraction"),
             ("Скала «Парус»", "Одинокая скала в море, напоминающая парусник.",
              "⛵ <b>Скала Парус</b> находится в районе посёлка Джанхот (близ Анапы).\nПредставляет собой вертикально стоящий пласт песчаника высотой 25 м.\nПо легенде, это окаменевший парусник греческих мореплавателей.",
-             44.438, 38.230, "25.jpg", "attraction")
+             44.438, 38.230, "25.jpg", "attraction"),
+            # Новый пример платного заведения
+            ("Кафе «У моря»", "Уютное кафе с видом на море. Отправьте геопозицию, когда будете рядом.",
+             "🍽 <b>Кафе «У моря»</b> — популярное место с летней верандой.\nРаботает с 2010 года. В меню: блюда европейской и кавказской кухни.\nЧасы работы: 10:00–23:00.",
+             44.8910, 37.3100, "cafe1.jpg", "food")
         ]
         c.executemany(
             "INSERT INTO locations (name, description, info, lat, lon, photo, type) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -523,7 +527,6 @@ def get_share_location_keyboard():
 
 # ===== АСИНХРОННЫЕ ОБЁРТКИ ДЛЯ YOOKASSA =====
 async def create_payment_async(amount, description, metadata):
-    """Асинхронно создаёт платёж через ЮKassa."""
     import uuid
     from yookassa import Configuration, Payment
     Configuration.account_id = YOOKASSA_SHOP_ID
@@ -546,7 +549,6 @@ async def create_payment_async(amount, description, metadata):
     return payment
 
 async def check_payment_async(payment_id):
-    """Асинхронно проверяет статус платежа."""
     from yookassa import Configuration, Payment
     Configuration.account_id = YOOKASSA_SHOP_ID
     Configuration.secret_key = YOOKASSA_SECRET_KEY
