@@ -1,3 +1,5 @@
+#"8675178726:AAHnnPNuVVfI23wwWfEVEK_c0kZUhzALVhY"
+#[5196749531]
 import asyncio
 import sqlite3
 import io
@@ -617,6 +619,13 @@ async def handle_nearby_search(message: types.Message, state: FSMContext):
         await message.answer(text, parse_mode="HTML", reply_markup=ReplyKeyboardRemove())
     else:
         await message.answer("Рядом ничего не найдено.", reply_markup=ReplyKeyboardRemove())
+    # Отправляем главное меню отдельным сообщением
+    await bot.send_message(
+        chat_id=message.chat.id,
+        text="🏙 <b>Главное меню</b>",
+        parse_mode="HTML",
+        reply_markup=get_main_menu_keyboard(user_id)
+    )
     await state.clear()
 
 @dp.callback_query(F.data == "add_location_info")
@@ -788,8 +797,11 @@ async def retry_location(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data == "confirm_location")
 async def confirm_location_button(callback: types.CallbackQuery):
-    await callback.answer("📍 Отправьте вашу геопозицию для подтверждения.", show_alert=False)
-    await callback.message.answer("Пожалуйста, отправьте вашу геопозицию (📎 > Геопозиция).")
+    await callback.message.answer(
+        "📍 Пожалуйста, отправьте вашу геопозицию, нажав кнопку ниже.",
+        reply_markup=get_share_location_keyboard()
+    )
+    await callback.answer()
 
 @dp.callback_query(F.data == "skip_location")
 async def skip_location(callback: types.CallbackQuery, state: FSMContext):
@@ -852,10 +864,18 @@ async def handle_location(message: types.Message, state: FSMContext):
             await message.answer(text, parse_mode="HTML", reply_markup=ReplyKeyboardRemove())
         else:
             await message.answer("Рядом ничего не найдено.", reply_markup=ReplyKeyboardRemove())
+        await bot.send_message(
+            chat_id=message.chat.id,
+            text="🏙 <b>Главное меню</b>",
+            parse_mode="HTML",
+            reply_markup=get_main_menu_keyboard(user_id)
+        )
         await state.clear()
         return
 
-    # Квест активен
+    # Квест активен – сначала скрываем клавиатуру геопозиции
+    await bot.send_message(user_id, "\u200b", reply_markup=ReplyKeyboardRemove())
+
     data = await state.get_data()
     current_id = data.get("current_idx")
     if current_id is None:
@@ -902,6 +922,7 @@ async def handle_location(message: types.Message, state: FSMContext):
         dist = geodesic((message.location.latitude, message.location.longitude), (loc["lat"], loc["lon"])).meters
         await message.answer(f"❌ До «{loc['name']}» ещё {dist:.0f} м.", reply_markup=get_quest_keyboard())
 
+# Статистика и информация
 @dp.callback_query(F.data == "my_stats")
 async def my_stats(callback: types.CallbackQuery):
     user_id = callback.from_user.id
@@ -1074,7 +1095,7 @@ async def admin_users_info(callback: types.CallbackQuery):
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
     await callback.answer()
 
-# --- Управление локациями (полный код) ---
+# --- Управление локациями ---
 @dp.callback_query(F.data == "admin_locations_menu")
 async def admin_locations_menu(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS: return
