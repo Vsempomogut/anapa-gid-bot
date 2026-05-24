@@ -22,7 +22,6 @@ RADIUS_METERS = 50
 ADMIN_IDS = [5196749531]            # замените на свои Telegram ID
 IMAGES_FOLDER = "images"
 
-# ЮKassa (необязательно, если оплата не используется)
 YOOKASSA_SHOP_ID = "ВАШ_SHOP_ID"
 YOOKASSA_SECRET_KEY = "ВАШ_СЕКРЕТНЫЙ_КЛЮЧ"
 
@@ -522,6 +521,38 @@ def get_share_location_keyboard():
     builder.adjust(1)
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=True)
 
+# ===== АСИНХРОННЫЕ ОБЁРТКИ ДЛЯ YOOKASSA =====
+async def create_payment_async(amount, description, metadata):
+    """Асинхронно создаёт платёж через ЮKassa."""
+    import uuid
+    from yookassa import Configuration, Payment
+    Configuration.account_id = YOOKASSA_SHOP_ID
+    Configuration.secret_key = YOOKASSA_SECRET_KEY
+    idempotence_key = str(uuid.uuid4())
+    payment = await asyncio.to_thread(
+        Payment.create,
+        {
+            "amount": {"value": f"{amount:.2f}", "currency": "RUB"},
+            "confirmation": {
+                "type": "redirect",
+                "return_url": f"https://t.me/{(await bot.get_me()).username}"
+            },
+            "capture": True,
+            "description": description,
+            "metadata": metadata
+        },
+        idempotence_key
+    )
+    return payment
+
+async def check_payment_async(payment_id):
+    """Асинхронно проверяет статус платежа."""
+    from yookassa import Configuration, Payment
+    Configuration.account_id = YOOKASSA_SHOP_ID
+    Configuration.secret_key = YOOKASSA_SECRET_KEY
+    payment = await asyncio.to_thread(Payment.find_one, payment_id)
+    return payment
+
 # ===== ОБРАБОТЧИКИ =====
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
@@ -678,6 +709,7 @@ async def process_new_location_description(message: Message, state: FSMContext):
     await message.answer("✅ Спасибо! Ваша заявка отправлена администраторам. После одобрения вам придёт ссылка на оплату.")
     await start_cmd(message, state)
 
+# ===== ОБРАБОТЧИКИ КВЕСТА =====
 @dp.callback_query(F.data == "start_quest")
 async def start_quest(callback: types.CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
@@ -888,8 +920,8 @@ async def my_stats(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "about_quest")
 async def about_quest(callback: types.CallbackQuery):
     price = get_price()
-    payment_status = "включён" if is_payment_enabled() else "отключён"
     loc_price = get_location_price()
+    payment_status = "включён" if is_payment_enabled() else "отключён"
     text = (f"ℹ️ <b>Гид-бот по Анапе</b>\n\n"
             f"{get_locations_count()} локаций с историческими справками.\n"
             f"Режим оплаты: {payment_status}.\n"
@@ -937,7 +969,7 @@ async def process_support_message(message: Message, state: FSMContext):
     await state.clear()
     await start_cmd(message, state)
 
-# ===== АДМИН-ПАНЕЛЬ (ПОЛНЫЙ КОД) =====
+# ===== АДМИН-ПАНЕЛЬ =====
 async def show_admin_panel(target):
     builder = InlineKeyboardBuilder()
     builder.button(text="📊 Статистика", callback_data="admin_stats_menu")
@@ -1201,6 +1233,7 @@ async def process_edit_value(message: Message, state: FSMContext):
             dest_path = os.path.join(IMAGES_FOLDER, new_filename)
             await bot.download(file, destination=dest_path)
             value = new_filename
+        # иначе текстовое имя файла
     update_location_field(loc_id, field, value)
     await state.clear()
     await message.answer("✅ Локация обновлена.")
@@ -1249,7 +1282,7 @@ async def confirm_delete_location(callback: types.CallbackQuery):
     await callback.answer(f"Локация «{loc['name']}» удалена.", show_alert=True)
     await admin_locations_menu(callback)
 
-# --- Управление оплатой (исправлено) ---
+# --- Управление оплатой ---
 @dp.callback_query(F.data == "admin_payment_settings")
 async def admin_payment_settings(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS: return
@@ -1324,7 +1357,7 @@ async def process_new_location_price(message: Message, state: FSMContext):
         await state.clear()
     await show_admin_panel(message)
 
-# --- Сообщения (за 30 дней) ---
+# --- Сообщения (30 дней) ---
 @dp.callback_query(F.data == "admin_messages")
 async def admin_messages_list(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS: return
@@ -1386,7 +1419,7 @@ async def admin_reply_send(message: Message, state: FSMContext):
         await state.clear()
     await show_admin_panel(message)
 
-# --- Заявки на добавление ---
+# --- Заявки на добавление локаций ---
 @dp.callback_query(F.data == "admin_location_requests")
 async def admin_location_requests(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS: return
@@ -1417,28 +1450,15 @@ async def approve_location_request(callback: types.CallbackQuery):
         await callback.answer("Заявка не найдена.", show_alert=True)
         return
     user_id, name, photo, tags, city, address, description = req[0]
-    
     if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
         await callback.answer("ЮKassa не настроена. Невозможно создать платёж.", show_alert=True)
         return
-
     try:
-        from yookassa import Configuration, Payment
-        Configuration.account_id = YOOKASSA_SHOP_ID
-        Configuration.secret_key = YOOKASSA_SECRET_KEY
-        import uuid
-        idempotence_key = str(uuid.uuid4())
-        loc_price = get_location_price()
-        payment = Payment.create({
-            "amount": {"value": f"{loc_price:.2f}", "currency": "RUB"},
-            "confirmation": {
-                "type": "redirect",
-                "return_url": f"https://t.me/{(await bot.get_me()).username}"
-            },
-            "capture": True,
-            "description": f"Добавление локации '{name}'",
-            "metadata": {"request_id": req_id}
-        }, idempotence_key)
+        payment = await create_payment_async(
+            amount=get_location_price(),
+            description=f"Добавление локации '{name}'",
+            metadata={"request_id": req_id}
+        )
         db_execute("UPDATE location_requests SET status='awaiting_payment', payment_id=? WHERE id=?", (payment.id, req_id))
         builder = InlineKeyboardBuilder()
         builder.button(text="💳 Оплатить добавление", url=payment.confirmation.confirmation_url)
@@ -1447,7 +1467,7 @@ async def approve_location_request(callback: types.CallbackQuery):
             await bot.send_message(
                 user_id,
                 f"📢 Ваша заявка на добавление «{name}» одобрена!\n"
-                f"Для публикации оплатите {loc_price:.0f}₽.",
+                f"Для публикации оплатите {get_location_price():.0f}₽.",
                 reply_markup=builder.as_markup()
             )
             await callback.answer("Пользователю отправлена ссылка на оплату.", show_alert=True)
@@ -1466,10 +1486,7 @@ async def check_location_payment(callback: types.CallbackQuery):
         return
     payment_id, user_id, name = req[0]
     try:
-        from yookassa import Configuration, Payment
-        Configuration.account_id = YOOKASSA_SHOP_ID
-        Configuration.secret_key = YOOKASSA_SECRET_KEY
-        payment = Payment.find_one(payment_id)
+        payment = await check_payment_async(payment_id)
         if payment.status == "succeeded":
             db_execute("UPDATE location_requests SET status='paid' WHERE id=?", (req_id,))
             await bot.send_message(user_id, "✅ Оплата получена! Администратор скоро добавит вашу локацию на карту.")
@@ -1502,81 +1519,60 @@ async def remind_stuck(callback: types.CallbackQuery):
             pass
     await callback.answer(f"Отправлено {count} напоминаний.", show_alert=True)
 
-# ===== ПЛАТЕЖИ (основной доступ, если включена оплата) =====
-if is_payment_enabled():
-    from yookassa import Configuration, Payment
-
-    async def create_payment(user_id):
-        import uuid
-        Configuration.account_id = YOOKASSA_SHOP_ID
-        Configuration.secret_key = YOOKASSA_SECRET_KEY
-
-        idempotence_key = str(uuid.uuid4())
-        price = get_price()
-        payment = Payment.create({
-            "amount": {"value": f"{price:.2f}", "currency": "RUB"},
-            "confirmation": {
-                "type": "redirect",
-                "return_url": f"https://t.me/{(await bot.get_me()).username}"
-            },
-            "capture": True,
-            "description": f"Доступ к гиду по Анапе (пользователь {user_id})",
-            "metadata": {"user_id": user_id}
-        }, idempotence_key)
-
+# ===== ОПЛАТА ДОСТУПА (асинхронная) =====
+@dp.callback_query(F.data == "pay_access")
+async def pay_access(callback: types.CallbackQuery):
+    if not is_payment_enabled():
+        await callback.answer("Оплата отключена.", show_alert=True)
+        return
+    user_id = callback.from_user.id
+    if is_user_paid(user_id):
+        await callback.answer("Вы уже оплатили доступ!", show_alert=True)
+        return
+    if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
+        await callback.answer("Платёжная система не настроена.", show_alert=True)
+        return
+    await callback.answer("Создаю платёж...")
+    try:
+        payment = await create_payment_async(
+            amount=get_price(),
+            description=f"Доступ к гиду по Анапе (пользователь {user_id})",
+            metadata={"user_id": user_id}
+        )
         db_execute("INSERT INTO payments (payment_id, user_id, amount, status, created_at) VALUES (?, ?, ?, 'pending', ?)",
-                   (payment.id, user_id, price, datetime.now()))
-        return payment.id, payment.confirmation.confirmation_url
+                   (payment.id, user_id, get_price(), datetime.now()))
+        builder = InlineKeyboardBuilder()
+        builder.button(text="💳 Перейти к оплате", url=payment.confirmation.confirmation_url)
+        builder.button(text="🔄 Проверить оплату", callback_data=f"check_payment_{payment.id}")
+        builder.button(text="🏠 Главное меню", callback_data="main_menu")
+        await callback.message.edit_text(
+            f"💳 <b>Оплата доступа</b>\n\nСтоимость: {get_price():.0f}₽\n\n"
+            "После оплаты нажмите «Проверить оплату».",
+            parse_mode="HTML", reply_markup=builder.as_markup()
+        )
+    except Exception as e:
+        logger.error(f"Ошибка создания платежа: {e}")
+        await callback.message.edit_text("❌ Не удалось создать платёж. Попробуйте позже.")
+    await callback.answer()
 
-    async def check_payment(payment_id):
-        Configuration.account_id = YOOKASSA_SHOP_ID
-        Configuration.secret_key = YOOKASSA_SECRET_KEY
-        payment = Payment.find_one(payment_id)
-        return payment.status
-
-    @dp.callback_query(F.data == "pay_access")
-    async def pay_access(callback: types.CallbackQuery):
-        if not is_payment_enabled():
-            await callback.answer("Оплата отключена.", show_alert=True)
-            return
-        user_id = callback.from_user.id
-        if is_user_paid(user_id):
-            await callback.answer("Вы уже оплатили доступ!", show_alert=True)
-            return
-        try:
-            payment_id, payment_url = await create_payment(user_id)
-            builder = InlineKeyboardBuilder()
-            builder.button(text="💳 Перейти к оплате", url=payment_url)
-            builder.button(text="🔄 Проверить оплату", callback_data=f"check_payment_{payment_id}")
-            builder.button(text="🏠 Главное меню", callback_data="main_menu")
-            await callback.message.edit_text(
-                f"💳 <b>Оплата доступа</b>\n\nСтоимость: {get_price():.0f}₽\n\n"
-                "После оплаты нажмите «Проверить оплату».",
-                parse_mode="HTML", reply_markup=builder.as_markup()
-            )
-        except Exception as e:
-            logger.error(f"Ошибка создания платежа: {e}")
-            await callback.answer("Ошибка при создании платежа. Проверьте настройки ЮKassa.", show_alert=True)
-        await callback.answer()
-
-    @dp.callback_query(F.data.startswith("check_payment_"))
-    async def process_payment_check(callback: types.CallbackQuery, state: FSMContext):
-        payment_id = callback.data.replace("check_payment_", "")
-        try:
-            status = await check_payment(payment_id)
-            if status == "succeeded":
-                db_execute("UPDATE payments SET status='succeeded', completed_at=? WHERE payment_id=?",
-                           (datetime.now(), payment_id))
-                await callback.message.edit_text("✅ Оплата прошла успешно!")
-                await main_menu(callback, state)
-            elif status == "pending":
-                await callback.answer("⏳ Платёж ещё не завершён. Попробуйте позже.", show_alert=True)
-            else:
-                await callback.answer(f"❌ Статус: {status}. Попробуйте снова или обратитесь в поддержку.", show_alert=True)
-        except Exception as e:
-            logger.error(f"Ошибка проверки платежа: {e}")
-            await callback.answer("⚠️ Не удалось проверить платёж.", show_alert=True)
-        await callback.answer()
+@dp.callback_query(F.data.startswith("check_payment_"))
+async def process_payment_check(callback: types.CallbackQuery, state: FSMContext):
+    payment_id = callback.data.replace("check_payment_", "")
+    try:
+        payment = await check_payment_async(payment_id)
+        if payment.status == "succeeded":
+            db_execute("UPDATE payments SET status='succeeded', completed_at=? WHERE payment_id=?",
+                       (datetime.now(), payment_id))
+            await callback.message.edit_text("✅ Оплата прошла успешно!")
+            await main_menu(callback, state)
+        elif payment.status == "pending":
+            await callback.answer("⏳ Платёж ещё не завершён. Попробуйте позже.", show_alert=True)
+        else:
+            await callback.answer(f"❌ Статус: {payment.status}. Попробуйте снова или обратитесь в поддержку.", show_alert=True)
+    except Exception as e:
+        logger.error(f"Ошибка проверки платежа: {e}")
+        await callback.answer("⚠️ Не удалось проверить платёж.", show_alert=True)
+    await callback.answer()
 
 # ===== ЗАПУСК =====
 async def main():
