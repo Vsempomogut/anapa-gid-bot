@@ -22,6 +22,7 @@ RADIUS_METERS = 50
 ADMIN_IDS = [5196749531]            # замените на свои Telegram ID
 IMAGES_FOLDER = "images"
 
+# ЮKassa (необязательно, если оплата не используется)
 YOOKASSA_SHOP_ID = "ВАШ_SHOP_ID"
 YOOKASSA_SECRET_KEY = "ВАШ_СЕКРЕТНЫЙ_КЛЮЧ"
 
@@ -95,7 +96,78 @@ def init_db():
             ("Русские ворота", "Остатки турецкой крепости. Отправьте геопозицию, когда окажетесь рядом.",
              "🏛 <b>Русские ворота</b> — памятник архитектуры XVIII века.\nПостроены в 1783 году как часть турецкой крепости Анапа.\nНазваны в честь 25-летия освобождения города от турок в 1828 году.\nАвтор проекта неизвестен, реставрация проводилась в 1950-х годах.",
              44.8955, 37.3198, "1.jpg", "attraction"),
-            # ... (вставьте остальные 24 локации из предыдущего полного списка, добавив 'attraction')
+            ("Храм Святого Онуфрия Великого", "Старейший православный храм Анапы. Подойдите поближе.",
+             "⛪ <b>Храм Святого Онуфрия</b> построен в 1830 году.\nОсвящён в честь небесного покровителя города — святого Онуфрия.\nАрхитектор: предположительно И. К. Мальберг.\nХрам пережил Крымскую войну и советские гонения, возвращён верующим в 1990-х.",
+             44.8977, 37.3174, "2.jpg", "attraction"),
+            ("Сквер имени Гудовича", "Уютный сквер с фонтаном в центре города. Отметьтесь здесь.",
+             "🌳 <b>Сквер Гудовича</b> назван в честь генерала Ивана Гудовича,\nкомандовавшего русскими войсками при взятии Анапы в 1791 году.\nБлагоустроен в 1960-х, фонтан установлен в 1985 году.",
+             44.8959, 37.3148, "3.jpg", "attraction"),
+            ("Анапский краеведческий музей", "Богатая коллекция артефактов от античности до наших дней. Вход рядом.",
+             "🏺 <b>Краеведческий музей</b> основан в 1913 году.\nСодержит более 30 000 экспонатов: античные амфоры, турецкое оружие,\nпредметы быта казаков. Здание построено в стиле модерн в 1909 году.",
+             44.8961, 37.3167, "4.jpg", "attraction"),
+            ("Цветомузыкальный фонтан на набережной", "Светомузыкальное шоу на центральной набережной. Найдите фонтаны.",
+             "💦 <b>Цветомузыкальный фонтан</b> открыт в 2014 году.\nВечерние представления под музыку собирают сотни зрителей.\nФонтан состоит из 120 струй, подсвечиваемых RGB-светильниками.",
+             44.8936, 37.3170, "5.jpg", "attraction"),
+            ("Памятник «Отдыхающий»", "Забавная скульптура отдыхающего в гамаке на набережной.",
+             "😂 <b>Памятник отдыхающему</b> установлен в 2004 году.\nСкульптор: Александр Аполлонов.\nСтал одним из символов курортной Анапы, популярен для фото.",
+             44.8933, 37.3162, "6.jpg", "attraction"),
+            ("Памятник «Белая шляпа»", "Огромная белая шляпа – дань курортной моде. Сделайте фото.",
+             "👒 <b>Белая шляпа</b> — арт-объект, установленный в 2010 году.\nДиаметр шляпы около 3 метров, весит более тонны.\nСимволизирует защиту от солнца и лёгкость отпуска.",
+             44.8921, 37.3150, "7.jpg", "attraction"),
+            ("Парк 30-летия Победы", "Главный городской парк с аттракционами и аллеями.",
+             "🌲 <b>Парк 30-летия Победы</b> разбит в 1975 году.\nЗанимает площадь около 20 гектаров.\nЗдесь установлен Вечный огонь и памятник воинам-освободителям.",
+             44.8941, 37.3135, "8.jpg", "attraction"),
+            ("Арка Центрального пляжа", "Знаменитая арка, ведущая к главному песчаному пляжу.",
+             "🏖 <b>Арка Центрального пляжа</b> построена в 1956 году по проекту\nархитектора В. П. Соколова. Мозаичное панно на арке изображает\nморские мотивы и является визитной карточкой курорта.",
+             44.8905, 37.3127, "9.jpg", "attraction"),
+            ("Лермонтовская беседка", "Место, где любил бывать Михаил Лермонтов. Панорамный вид на море.",
+             "📜 <b>Лермонтовская беседка</b> сооружена в 1900-х годах на месте,\nгде по преданию поэт любовался морем во время ссылки на Кавказ.\nОтсюда открывается вид на Анапскую бухту и мыс Утриш.",
+             44.8917, 37.3082, "10.jpg", "attraction"),
+            ("Анапский маяк", "Действующий маяк на высоком обрывистом берегу.",
+             "🔦 <b>Анапский маяк</b> построен в 1898 году.\nВысота башни 21 м, свет виден на 18 миль.\nКонструкция: французская оптика Френеля, капитальный ремонт в 2003 г.",
+             44.8869, 37.2990, "11.jpg", "attraction"),
+            ("Смотровая площадка «Ласточкино гнездо»", "Потрясающий обзор побережья со скалы.",
+             "🌅 <b>Смотровая площадка</b> обустроена в 1970-х годах.\nНазвание получила из-за сходства с крымским Ласточкиным гнездом.\nВ ясную погоду видно от мыса Утриш до косы Чушка.",
+             44.8878, 37.3005, "12.jpg", "attraction"),
+            ("Дельфинарий на Пионерском проспекте", "Яркие представления с дельфинами и морскими котиками.",
+             "🐬 <b>Анапский дельфинарий</b> открыт в 1992 году.\nВмещает до 500 зрителей, представления идут с мая по сентябрь.\nПомимо дельфинов, выступают белухи и морские львы.",
+             44.8790, 37.2935, "13.jpg", "attraction"),
+            ("Аквапарк «Золотой пляж»", "Один из крупнейших аквапарков России с десятками горок.",
+             "🌊 <b>Аквапарк «Золотой пляж»</b> работает с 2006 года.\nБолее 25 горок, бассейн с искусственной волной, детский городок.\nРасположен прямо у берега Чёрного моря.",
+             44.8840, 37.2975, "14.jpg", "attraction"),
+            ("Кипарисовое озеро", "Живописное озеро среди кипарисов – рай для фотографов.",
+             "🌲 <b>Кипарисовое озеро</b> — искусственный водоём, созданный в 1980-х.\nОкружён болотными кипарисами, занесёнными в Красную книгу.\nПопулярно для снимков на фоне отражения деревьев в воде.",
+             44.910, 37.350, "15.jpg", "attraction"),
+            ("Долина Сукко", "Можжевеловые леса и целебный воздух в долине реки Сукко.",
+             "🌿 <b>Долина Сукко</b> известна реликтовыми можжевельниками возрастом до 600 лет.\nЗдесь снимались фильмы «Кавказская пленница» и «Формула любви».\nНаходится на территории заказника «Большой Утриш».",
+             44.790, 37.370, "16.jpg", "attraction"),
+            ("Заповедник «Большой Утриш»", "Дикие пляжи, скалы и уникальная природа заповедника.",
+             "🏞 <b>Большой Утриш</b> — государственный природный заповедник с 2010 года.\nВключает реликтовые фисташково-можжевеловые леса и морские гроты.\nОбитают черепахи Никольского и средиземноморские сколопендры.",
+             44.750, 37.380, "17.jpg", "attraction"),
+            ("Станица Варваровка", "Тихая станица, окружённая виноградниками и холмами.",
+             "🍇 <b>Варваровка</b> основана в 1862 году как казачья станица.\nМестные винодельни производят сорта «Саперави» и «Рислинг».\nВ окрестностях находится древнее городище Горгиппия (III в. до н.э.).",
+             44.840, 37.370, "18.jpg", "attraction"),
+            ("Благовещенская коса", "Узкая песчаная коса между Чёрным морем и лиманами.",
+             "🏄 <b>Благовещенская</b> — посёлок на косе длиной 12 км.\nИдеальное место для кайтинга, виндсёрфинга и пляжного отдыха.\nЛиманы Кизилташский и Витязевский богаты лечебными грязями.",
+             44.960, 37.280, "19.jpg", "attraction"),
+            ("Винодельня «Шато Тамань»", "Современное винодельческое хозяйство с дегустационным залом.",
+             "🍷 <b>Шато Тамань</b> открыто в 2006 году на Таманском полуострове.\nПроизводит премиальные вина из местного винограда.\nАрхитектура здания напоминает французские замки.",
+             45.150, 36.710, "20.jpg", "attraction"),
+            ("Крепость Фанагория", "Руины античного города и крепости, археологический памятник.",
+             "🏛 <b>Фанагория</b> — крупнейшая древнегреческая колония на территории России,\nоснованная в 543 году до н.э. Раскопки ведутся с 1936 года.\nОбнаружены остатки храмов, виноделен и жилых кварталов.",
+             45.270, 36.960, "21.jpg", "attraction"),
+            ("Грязевой вулкан Карабетова гора", "Действующий грязевой вулкан с лечебной глиной.",
+             "🌋 <b>Карабетова гора</b> — один из крупнейших грязевых вулканов Тамани.\nВысота около 150 м, извержения происходят каждые 10-15 лет.\nГрязь используется в бальнеологических целях.",
+             45.200, 37.000, "22.jpg", "attraction"),
+            ("Памятник «Казакам-переселенцам»", "Монумент в честь основания казачьих станиц на Кубани.",
+             "🗿 <b>Памятник казакам</b> установлен в 2011 году.\nСкульптор А. Скнарин изобразил казака с конём, олицетворяющего\nпереселение Черноморского казачьего войска в 1792 году.",
+             44.920, 37.300, "23.jpg", "attraction"),
+            ("Анапский археологический музей под открытым небом", "Остатки античного города Горгиппия на месте раскопок.",
+             "🏺 <b>Горгиппия</b> — античный город Боспорского царства (IV в. до н.э. – III в. н.э.).\nРаскопки ведутся с 1940-х, открыты улицы, дома, винодельни и некрополь.\nВ 1977 году на этом месте создан музей-заповедник под открытым небом.",
+             44.8960, 37.3150, "24.jpg", "attraction"),
+            ("Скала «Парус»", "Одинокая скала в море, напоминающая парусник.",
+             "⛵ <b>Скала Парус</b> находится в районе посёлка Джанхот (близ Анапы).\nПредставляет собой вертикально стоящий пласт песчаника высотой 25 м.\nПо легенде, это окаменевший парусник греческих мореплавателей.",
+             44.438, 38.230, "25.jpg", "attraction")
         ]
         c.executemany(
             "INSERT INTO locations (name, description, info, lat, lon, photo, type) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -120,7 +192,6 @@ def init_db():
         replied INTEGER DEFAULT 0
     )''')
 
-    # Новая таблица для заявок на добавление локаций
     c.execute('''CREATE TABLE IF NOT EXISTS location_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -157,6 +228,9 @@ class AdminEditLocation(StatesGroup):
     waiting_for_new_value = State()
 
 class AdminChangePrice(StatesGroup):
+    waiting_for_price = State()
+
+class AdminChangeLocationPrice(StatesGroup):
     waiting_for_price = State()
 
 class UserSupportMessage(StatesGroup):
@@ -467,7 +541,6 @@ async def main_menu(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data == "nearby_all")
 async def nearby_all(callback: types.CallbackQuery, state: FSMContext):
-    # Доступно без оплаты основного доступа? Оставим как есть, но если нужна оплата, проверка is_user_paid есть.
     if not is_user_paid(callback.from_user.id):
         await callback.answer("Сначала оплатите доступ!", show_alert=True)
         return
@@ -513,7 +586,6 @@ async def handle_nearby_search(message: types.Message, state: FSMContext):
         await message.answer("Рядом ничего не найдено.", reply_markup=ReplyKeyboardRemove())
     await state.clear()
 
-# Кнопка "Добавить локацию" доступна ВСЕГДА, без проверки оплаты
 @dp.callback_query(F.data == "add_location_info")
 async def add_location_info(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(UserAddLocation.waiting_for_name)
@@ -566,7 +638,6 @@ async def process_new_location_address(message: Message, state: FSMContext):
 async def process_new_location_description(message: Message, state: FSMContext):
     data = await state.get_data()
     user = message.from_user
-    # Сохраняем заявку в таблицу location_requests
     db_execute(
         "INSERT INTO location_requests (user_id, name, photo, tags, city, address, description, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (user.id, data['loc_name'], data.get('loc_photo'), data['loc_tags'], data['loc_city'], data['loc_address'], message.text, datetime.now())
@@ -866,7 +937,7 @@ async def process_support_message(message: Message, state: FSMContext):
     await state.clear()
     await start_cmd(message, state)
 
-# ===== АДМИН-ПАНЕЛЬ (расширенная) =====
+# ===== АДМИН-ПАНЕЛЬ (ПОЛНЫЙ КОД) =====
 async def show_admin_panel(target):
     builder = InlineKeyboardBuilder()
     builder.button(text="📊 Статистика", callback_data="admin_stats_menu")
@@ -969,11 +1040,216 @@ async def admin_users_info(callback: types.CallbackQuery):
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
     await callback.answer()
 
-# --- Управление локациями (то же, что и раньше, без изменений) ---
-# Вставьте полный код управления локациями из предыдущего ответа (admin_locations_menu и все вложенные обработчики)
-# ... (опущено для краткости, но обязательно должно быть)
+# --- Управление локациями (полный код) ---
+@dp.callback_query(F.data == "admin_locations_menu")
+async def admin_locations_menu(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    builder = InlineKeyboardBuilder()
+    builder.button(text="➕ Добавить", callback_data="admin_add_location")
+    builder.button(text="📋 Список", callback_data="admin_list_locations")
+    builder.button(text="✏️ Редактировать", callback_data="admin_edit_location_select")
+    builder.button(text="❌ Удалить", callback_data="admin_delete_location")
+    builder.button(text="🔙 Назад", callback_data="admin_back")
+    builder.adjust(1)
+    await callback.message.edit_text("📍 <b>Управление локациями</b>", parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.answer()
 
-# --- Управление оплатой (добавлена цена локации) ---
+# Добавление (пошаговый ввод)
+@dp.callback_query(F.data == "admin_add_location")
+async def admin_add_location_start(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS: return
+    await state.set_state(AdminAddLocation.waiting_for_name)
+    await callback.message.edit_text("Введите <b>название</b> локации:", parse_mode="HTML")
+    await callback.answer()
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_name))
+async def process_name(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    await state.update_data(name=message.text)
+    await state.set_state(AdminAddLocation.waiting_for_description)
+    await message.answer("Введите <b>краткое описание</b> (для карточки):", parse_mode="HTML")
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_description))
+async def process_description(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    await state.update_data(description=message.text)
+    await state.set_state(AdminAddLocation.waiting_for_info)
+    await message.answer("Введите <b>подробную историческую справку</b> (info):", parse_mode="HTML")
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_info))
+async def process_info(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    await state.update_data(info=message.text)
+    await state.set_state(AdminAddLocation.waiting_for_lat)
+    await message.answer("Введите <b>широту</b> (lat), например 44.8955:", parse_mode="HTML")
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_lat))
+async def process_lat(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    try:
+        lat = float(message.text.replace(',', '.'))
+        await state.update_data(lat=lat)
+        await state.set_state(AdminAddLocation.waiting_for_lon)
+        await message.answer("Введите <b>долготу</b> (lon), например 37.3198:", parse_mode="HTML")
+    except ValueError:
+        await message.answer("❌ Введите число. Пример: 44.8955")
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_lon))
+async def process_lon(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    try:
+        lon = float(message.text.replace(',', '.'))
+        await state.update_data(lon=lon)
+        await state.set_state(AdminAddLocation.waiting_for_photo)
+        await message.answer("📷 Отправьте <b>фотографию</b> локации (сжатое изображение).", parse_mode="HTML")
+    except ValueError:
+        await message.answer("❌ Введите число. Пример: 37.3198")
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_photo), F.photo)
+async def process_photo(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    data = await state.get_data()
+    loc_id = add_location(data['name'], data['description'], data['info'], data['lat'], data['lon'], "")
+    new_filename = f"loc_{loc_id}.jpg"
+    dest_path = os.path.join(IMAGES_FOLDER, new_filename)
+    await bot.download(message.photo[-1], destination=dest_path)
+    db_execute("UPDATE locations SET photo=? WHERE id=?", (new_filename, loc_id))
+    await state.clear()
+    await message.answer(f"✅ Локация «{data['name']}» добавлена с ID {loc_id}.")
+    await show_admin_panel(message)
+
+@dp.message(StateFilter(AdminAddLocation.waiting_for_photo))
+async def process_photo_invalid(message: Message):
+    if message.from_user.id not in ADMIN_IDS: return
+    await message.answer("Пожалуйста, отправьте именно фотографию (не документ).")
+
+# Редактирование локации
+@dp.callback_query(F.data == "admin_edit_location_select")
+async def admin_edit_location_select(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    all_ids = get_all_location_ids()
+    if not all_ids:
+        await callback.answer("Нет локаций.", show_alert=True)
+        return
+    builder = InlineKeyboardBuilder()
+    for loc_id in all_ids:
+        loc = get_location(loc_id)
+        builder.button(text=loc["name"], callback_data=f"edit_loc_{loc_id}")
+    builder.button(text="🔙 Назад", callback_data="admin_locations_menu")
+    builder.adjust(1)
+    await callback.message.edit_text("Выберите локацию для редактирования:", reply_markup=builder.as_markup())
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("edit_loc_"))
+async def edit_location_choose_field(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS: return
+    loc_id = int(callback.data.split("_")[2])
+    await state.update_data(editing_loc_id=loc_id)
+    builder = InlineKeyboardBuilder()
+    fields = [
+        ("Название", "edit_field_name"),
+        ("Описание", "edit_field_description"),
+        ("Историческая справка", "edit_field_info"),
+        ("Широта", "edit_field_lat"),
+        ("Долгота", "edit_field_lon"),
+        ("Фото", "edit_field_photo")
+    ]
+    for label, callback_data in fields:
+        builder.button(text=label, callback_data=callback_data)
+    builder.button(text="🔙 Назад", callback_data="admin_edit_location_select")
+    builder.adjust(2)
+    await callback.message.edit_text("Что будем редактировать?", reply_markup=builder.as_markup())
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("edit_field_"))
+async def edit_field_ask_value(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS: return
+    field = callback.data.split("_")[2]
+    await state.update_data(editing_field=field)
+    await state.set_state(AdminEditLocation.waiting_for_new_value)
+    prompts = {
+        "name": "Введите новое название:",
+        "description": "Введите новое описание:",
+        "info": "Введите новую историческую справку:",
+        "lat": "Введите новую широту:",
+        "lon": "Введите новую долготу:",
+        "photo": "Отправьте новое фото (или текстовое имя файла)."
+    }
+    await callback.message.edit_text(prompts.get(field, "Введите значение:"))
+    await callback.answer()
+
+@dp.message(StateFilter(AdminEditLocation.waiting_for_new_value))
+async def process_edit_value(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+    data = await state.get_data()
+    loc_id = data["editing_loc_id"]
+    field = data["editing_field"]
+    value = message.text
+    if field in ("lat", "lon"):
+        try:
+            value = float(value.replace(',', '.'))
+        except ValueError:
+            await message.answer("❌ Введите число.")
+            return
+    if field == "photo":
+        if message.photo:
+            file_id = message.photo[-1].file_id
+            file = await bot.get_file(file_id)
+            new_filename = f"loc_{loc_id}.jpg"
+            dest_path = os.path.join(IMAGES_FOLDER, new_filename)
+            await bot.download(file, destination=dest_path)
+            value = new_filename
+    update_location_field(loc_id, field, value)
+    await state.clear()
+    await message.answer("✅ Локация обновлена.")
+    await show_admin_panel(message)
+
+# Список и удаление
+@dp.callback_query(F.data == "admin_list_locations")
+async def admin_list_locations(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    all_ids = get_all_location_ids()
+    if not all_ids:
+        await callback.message.edit_text("Нет ни одной локации.", reply_markup=InlineKeyboardBuilder().button(text="🔙 Назад", callback_data="admin_locations_menu").as_markup())
+        await callback.answer()
+        return
+    text = "📍 <b>Список локаций:</b>\n\n"
+    for loc_id in all_ids:
+        loc = get_location(loc_id)
+        text += f"ID {loc_id}: {loc['name']}\n"
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="admin_locations_menu")
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.answer()
+
+@dp.callback_query(F.data == "admin_delete_location")
+async def admin_delete_location_start(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    all_ids = get_all_location_ids()
+    builder = InlineKeyboardBuilder()
+    for loc_id in all_ids:
+        loc = get_location(loc_id)
+        builder.button(text=f"❌ {loc['name']}", callback_data=f"confirm_delete_{loc_id}")
+    builder.button(text="🔙 Назад", callback_data="admin_locations_menu")
+    builder.adjust(1)
+    await callback.message.edit_text("Выберите локацию для удаления:", reply_markup=builder.as_markup())
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("confirm_delete_"))
+async def confirm_delete_location(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    loc_id = int(callback.data.split("_")[2])
+    loc = get_location(loc_id)
+    if not loc:
+        await callback.answer("Локация не найдена.", show_alert=True)
+        return
+    delete_location(loc_id)
+    await callback.answer(f"Локация «{loc['name']}» удалена.", show_alert=True)
+    await admin_locations_menu(callback)
+
+# --- Управление оплатой (исправлено) ---
 @dp.callback_query(F.data == "admin_payment_settings")
 async def admin_payment_settings(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS: return
@@ -1007,6 +1283,13 @@ async def admin_change_price(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text("Введите новую цену доступа (целое число):")
     await callback.answer()
 
+@dp.callback_query(F.data == "admin_change_location_price")
+async def admin_change_location_price(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS: return
+    await state.set_state(AdminChangeLocationPrice.waiting_for_price)
+    await callback.message.edit_text("Введите новую цену добавления локации (целое число):")
+    await callback.answer()
+
 @dp.message(StateFilter(AdminChangePrice.waiting_for_price))
 async def process_new_price(message: Message, state: FSMContext):
     if message.from_user.id not in ADMIN_IDS:
@@ -1024,40 +1307,21 @@ async def process_new_price(message: Message, state: FSMContext):
         await state.clear()
     await show_admin_panel(message)
 
-@dp.callback_query(F.data == "admin_change_location_price")
-async def admin_change_location_price(callback: types.CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in ADMIN_IDS: return
-    await state.set_state(AdminChangePrice.waiting_for_price)  # используем то же состояние, но с флагом
-    await state.update_data(changing_location_price=True)
-    await callback.message.edit_text("Введите новую цену добавления локации (целое число):")
-    await callback.answer()
-
-# Модифицируем process_new_price для обработки обоих случаев
-@dp.message(StateFilter(AdminChangePrice.waiting_for_price))
-async def process_new_price_generic(message: Message, state: FSMContext):
+@dp.message(StateFilter(AdminChangeLocationPrice.waiting_for_price))
+async def process_new_location_price(message: Message, state: FSMContext):
     if message.from_user.id not in ADMIN_IDS:
         await state.clear()
         return
-    data = await state.get_data()
-    if data.get('changing_location_price'):
-        try:
-            new_price = float(message.text)
-            if new_price <= 0:
-                raise ValueError
-            set_location_price(new_price)
-            await message.answer(f"✅ Цена добавления локации изменена на {new_price:.0f}₽")
-        except ValueError:
-            await message.answer("❌ Введите положительное число.")
-    else:
-        try:
-            new_price = float(message.text)
-            if new_price <= 0:
-                raise ValueError
-            set_price(new_price)
-            await message.answer(f"✅ Цена доступа изменена на {new_price:.0f}₽")
-        except ValueError:
-            await message.answer("❌ Введите положительное число.")
-    await state.clear()
+    try:
+        new_price = float(message.text)
+        if new_price <= 0:
+            raise ValueError
+        set_location_price(new_price)
+        await message.answer(f"✅ Цена добавления локации изменена на {new_price:.0f}₽")
+    except ValueError:
+        await message.answer("❌ Введите положительное число.")
+    finally:
+        await state.clear()
     await show_admin_panel(message)
 
 # --- Сообщения (за 30 дней) ---
@@ -1122,7 +1386,7 @@ async def admin_reply_send(message: Message, state: FSMContext):
         await state.clear()
     await show_admin_panel(message)
 
-# --- Заявки на добавление локаций ---
+# --- Заявки на добавление ---
 @dp.callback_query(F.data == "admin_location_requests")
 async def admin_location_requests(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS: return
@@ -1153,61 +1417,71 @@ async def approve_location_request(callback: types.CallbackQuery):
         await callback.answer("Заявка не найдена.", show_alert=True)
         return
     user_id, name, photo, tags, city, address, description = req[0]
-    # Отправляем пользователю ссылку на оплату
-    from yookassa import Configuration, Payment
-    Configuration.account_id = YOOKASSA_SHOP_ID
-    Configuration.secret_key = YOOKASSA_SECRET_KEY
-    import uuid
-    idempotence_key = str(uuid.uuid4())
-    loc_price = get_location_price()
-    payment = Payment.create({
-        "amount": {"value": f"{loc_price:.2f}", "currency": "RUB"},
-        "confirmation": {
-            "type": "redirect",
-            "return_url": f"https://t.me/{(await bot.get_me()).username}"
-        },
-        "capture": True,
-        "description": f"Добавление локации '{name}'",
-        "metadata": {"request_id": req_id}
-    }, idempotence_key)
-    db_execute("UPDATE location_requests SET status='awaiting_payment', payment_id=? WHERE id=?", (payment.id, req_id))
-    builder = InlineKeyboardBuilder()
-    builder.button(text="💳 Оплатить добавление", url=payment.confirmation.confirmation_url)
-    builder.button(text="🔄 Проверить оплату", callback_data=f"check_loc_payment_{req_id}")
+    
+    if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
+        await callback.answer("ЮKassa не настроена. Невозможно создать платёж.", show_alert=True)
+        return
+
     try:
-        await bot.send_message(
-            user_id,
-            f"📢 Ваша заявка на добавление «{name}» одобрена!\n"
-            f"Для публикации оплатите {loc_price:.0f}₽.",
-            reply_markup=builder.as_markup()
-        )
-        await callback.answer("Пользователю отправлена ссылка на оплату.", show_alert=True)
+        from yookassa import Configuration, Payment
+        Configuration.account_id = YOOKASSA_SHOP_ID
+        Configuration.secret_key = YOOKASSA_SECRET_KEY
+        import uuid
+        idempotence_key = str(uuid.uuid4())
+        loc_price = get_location_price()
+        payment = Payment.create({
+            "amount": {"value": f"{loc_price:.2f}", "currency": "RUB"},
+            "confirmation": {
+                "type": "redirect",
+                "return_url": f"https://t.me/{(await bot.get_me()).username}"
+            },
+            "capture": True,
+            "description": f"Добавление локации '{name}'",
+            "metadata": {"request_id": req_id}
+        }, idempotence_key)
+        db_execute("UPDATE location_requests SET status='awaiting_payment', payment_id=? WHERE id=?", (payment.id, req_id))
+        builder = InlineKeyboardBuilder()
+        builder.button(text="💳 Оплатить добавление", url=payment.confirmation.confirmation_url)
+        builder.button(text="🔄 Проверить оплату", callback_data=f"check_loc_payment_{req_id}")
+        try:
+            await bot.send_message(
+                user_id,
+                f"📢 Ваша заявка на добавление «{name}» одобрена!\n"
+                f"Для публикации оплатите {loc_price:.0f}₽.",
+                reply_markup=builder.as_markup()
+            )
+            await callback.answer("Пользователю отправлена ссылка на оплату.", show_alert=True)
+        except Exception as e:
+            await callback.answer(f"Не удалось отправить сообщение пользователю: {e}", show_alert=True)
     except Exception as e:
-        await callback.answer(f"Не удалось отправить сообщение пользователю: {e}", show_alert=True)
+        await callback.answer(f"Ошибка при создании платежа: {e}", show_alert=True)
 
 @dp.callback_query(F.data.startswith("check_loc_payment_"))
 async def check_location_payment(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS: return
     req_id = int(callback.data.split("_")[3])
-    req = db_execute("SELECT payment_id, user_id, name, photo, tags, city, address, description FROM location_requests WHERE id=?", (req_id,), fetch=True)
+    req = db_execute("SELECT payment_id, user_id, name FROM location_requests WHERE id=?", (req_id,), fetch=True)
     if not req:
         await callback.answer("Заявка не найдена.", show_alert=True)
         return
-    payment_id, user_id, name, photo, tags, city, address, description = req[0]
-    from yookassa import Configuration, Payment
-    Configuration.account_id = YOOKASSA_SHOP_ID
-    Configuration.secret_key = YOOKASSA_SECRET_KEY
-    payment = Payment.find_one(payment_id)
-    if payment.status == "succeeded":
-        # Добавляем локацию
-        add_location(name, description, description, 0, 0, photo if photo else "", tags if tags else "attraction")
-        db_execute("UPDATE location_requests SET status='paid' WHERE id=?", (req_id,))
-        await bot.send_message(user_id, "✅ Оплата получена, ваша локация добавлена на карту!")
-        await callback.answer("Локация добавлена.", show_alert=True)
-    elif payment.status == "pending":
-        await callback.answer("Платёж ещё не завершён.", show_alert=True)
-    else:
-        await callback.answer(f"Статус платежа: {payment.status}", show_alert=True)
+    payment_id, user_id, name = req[0]
+    try:
+        from yookassa import Configuration, Payment
+        Configuration.account_id = YOOKASSA_SHOP_ID
+        Configuration.secret_key = YOOKASSA_SECRET_KEY
+        payment = Payment.find_one(payment_id)
+        if payment.status == "succeeded":
+            db_execute("UPDATE location_requests SET status='paid' WHERE id=?", (req_id,))
+            await bot.send_message(user_id, "✅ Оплата получена! Администратор скоро добавит вашу локацию на карту.")
+            for admin_id in ADMIN_IDS:
+                await bot.send_message(admin_id, f"✅ Локация «{name}» оплачена. Добавьте её вручную через админ-панель.")
+            await callback.answer("Оплата подтверждена. Локация ожидает добавления.", show_alert=True)
+        elif payment.status == "pending":
+            await callback.answer("Платёж ещё не завершён.", show_alert=True)
+        else:
+            await callback.answer(f"Статус платежа: {payment.status}", show_alert=True)
+    except Exception as e:
+        await callback.answer(f"Ошибка при проверке платежа: {e}", show_alert=True)
     await admin_location_requests(callback)
 
 # --- Напоминания ---
