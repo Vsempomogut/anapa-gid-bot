@@ -1,5 +1,3 @@
-# TOKEN = "8675178726:AAHnnPNuVVfI23wwWfEVEK_c0kZUhzALVhY" 
-# ADMIN_IDS = [5196749531] Telegram ID
 import asyncio
 import sqlite3
 import io
@@ -13,18 +11,17 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.filters import Command, StateFilter
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.types import FSInputFile, Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
+from aiogram.types import FSInputFile, Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from geopy.distance import geodesic
 from flask import Flask
 
 # ===== НАСТРОЙКИ =====
-TOKEN = "8675178726:AAHnnPNuVVfI23wwWfEVEK_c0kZUhzALVhY"   # ← замените на новый токен
+TOKEN = "8675178726:AAHnnPNuVVfI23wwWfEVEK_c0kZUhzALVhY"   # ← замените
 RADIUS_METERS = 50
-ADMIN_IDS = [5196749531]            # замените на свои Telegram ID
+ADMIN_IDS = [5196749531]            # ← замените на свои Telegram ID
 IMAGES_FOLDER = "images"
 
-# ЮKassa (настройки для оплаты, если включена из админки)
 YOOKASSA_SHOP_ID = "ВАШ_SHOP_ID"
 YOOKASSA_SECRET_KEY = "ВАШ_СЕКРЕТНЫЙ_КЛЮЧ"
 
@@ -34,7 +31,7 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ===== FLASK В ОТДЕЛЬНОМ ПОТОКЕ (чтобы Render сразу видел порт) =====
+# ===== Flask (для Render) =====
 app = Flask(__name__)
 
 @app.route('/')
@@ -85,7 +82,6 @@ def init_db():
         photo TEXT
     )''')
 
-    # Стартовый набор из 25 локаций, если таблица пуста
     c.execute("SELECT COUNT(*) FROM locations")
     if c.fetchone()[0] == 0:
         default_locations = [
@@ -375,6 +371,23 @@ def get_photo_path(loc):
             return path
     return None
 
+def find_nearest_locations(lat, lon, limit=5):
+    """Возвращает список ближайших локаций с расстоянием."""
+    locs = []
+    for loc_id in get_all_location_ids():
+        loc = get_location(loc_id)
+        if not loc:
+            continue
+        dist = geodesic((lat, lon), (loc['lat'], loc['lon'])).meters
+        locs.append((dist, loc))
+    locs.sort(key=lambda x: x[0])
+    result = []
+    for dist, loc in locs[:limit]:
+        loc_copy = loc.copy()
+        loc_copy['distance'] = dist
+        result.append(loc_copy)
+    return result
+
 async def send_location_with_photo(chat_id, loc_id, prefix=""):
     loc = get_location(loc_id)
     if not loc:
@@ -431,6 +444,7 @@ def get_main_menu_keyboard(user_id: int):
         if skipped:
             builder.button(text="🔄 Перепройти пропущенные", callback_data="retry_skipped")
         builder.button(text="📊 Моя статистика", callback_data="my_stats")
+    builder.button(text="📍 Делиться местоположением", callback_data="share_location")
     builder.button(text="ℹ️ О гиде", callback_data="about_quest")
     builder.button(text="🆘 Помощь", callback_data="help_info")
     builder.adjust(2, 2, 1)
@@ -455,6 +469,13 @@ def get_retry_skipped_keyboard(user_id):
     builder.adjust(1)
     return builder.as_markup()
 
+def get_share_location_keyboard():
+    """Клавиатура с одной кнопкой 'Отправить геопозицию'."""
+    builder = ReplyKeyboardBuilder()
+    builder.add(KeyboardButton(text="📍 Отправить геопозицию", request_location=True))
+    builder.adjust(1)
+    return builder.as_markup(resize_keyboard=True, one_time_keyboard=True)
+
 # ===== ОБРАБОТЧИКИ =====
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
@@ -470,6 +491,15 @@ async def start_cmd(message: types.Message, state: FSMContext):
 async def main_menu(callback: types.CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     await callback.message.edit_text("🏙 <b>Главное меню</b>", parse_mode="HTML", reply_markup=get_main_menu_keyboard(user_id))
+    await callback.answer()
+
+@dp.callback_query(F.data == "share_location")
+async def share_location(callback: types.CallbackQuery):
+    """Запрос геопозиции у пользователя."""
+    await callback.message.answer(
+        "📍 Пожалуйста, поделитесь вашим местоположением, чтобы я мог показать ближайшие интересные места.",
+        reply_markup=get_share_location_keyboard()
+    )
     await callback.answer()
 
 @dp.callback_query(F.data == "start_quest")
@@ -585,12 +615,33 @@ async def skip_location(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.message(F.location)
 async def handle_location(message: types.Message, state: FSMContext):
+    """Универсальный обработчик геопозиции."""
     user_id = message.from_user.id
     register_user(user_id, message.from_user.username, message.from_user.first_name)
     if not is_user_paid(user_id):
         await message.answer("❌ Доступ платный. Нажмите /start и оплатите.")
         return
 
+    # Определяем, находится ли пользователь в процессе квеста
+    current_state = await state.get_state()
+    if current_state is None:
+        # Не в квесте – показываем ближайшие локации
+        nearest = find_nearest_locations(message.location.latitude, message.location.longitude, limit=5)
+        if nearest:
+            text = "📍 <b>Ближайшие места:</b>\n\n"
+            for i, loc in enumerate(nearest, 1):
+                d = loc['distance']
+                if d >= 1000:
+                    dist_str = f"{d/1000:.1f} км"
+                else:
+                    dist_str = f"{int(d)} м"
+                text += f"{i}. <b>{loc['name']}</b> – {dist_str}\n{loc['description']}\n\n"
+            await message.answer(text, parse_mode="HTML", reply_markup=ReplyKeyboardRemove())
+        else:
+            await message.answer("Рядом нет известных мест.", reply_markup=ReplyKeyboardRemove())
+        return
+
+    # Квест активен – работаем как обычно
     data = await state.get_data()
     current_id = data.get("current_idx")
     if current_id is None:
@@ -674,7 +725,8 @@ async def help_info(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         "📝 <b>Обратная связь</b>\n\n"
         "Опишите ваш вопрос или предложение, и администраторы получат ваше сообщение.\n"
-        "Для отмены нажмите /start.",
+        "Для отмены нажмите /start.\n\n"
+        "📍 <b>Поиск мест рядом:</b> просто отправьте свою геопозицию (не во время квеста), и бот покажет ближайшие интересные локации.",
         parse_mode="HTML"
     )
     await state.set_state(UserSupportMessage.waiting_for_message)
