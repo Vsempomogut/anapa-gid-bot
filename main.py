@@ -1,5 +1,3 @@
-#"8675178726:AAHnnPNuVVfI23wwWfEVEK_c0kZUhzALVhY"
-#[5196749531]
 import asyncio
 import sqlite3
 import io
@@ -476,7 +474,7 @@ async def send_location_with_photo(chat_id, loc_id, prefix=""):
     caption = (f"{prefix}📍 <b>{loc['name']}</b> ({loc_id}/{total})\n"
                f"{loc['description']}{distance_text}\n\n"
                f"Прогресс: {progress_bar} ({stats['visited']}/{total})\n\n"
-               f"Нажмите «📍 Я на месте» или отправьте геопозицию.")
+               f"Нажмите «✅ Подтвердить посещение» или «📍 Я на месте (гео)».")
     if photo_path:
         await bot.send_photo(chat_id, FSInputFile(photo_path), caption=caption, parse_mode="HTML", reply_markup=get_quest_keyboard())
     else:
@@ -517,11 +515,12 @@ def get_main_menu_keyboard(user_id: int):
 
 def get_quest_keyboard():
     builder = InlineKeyboardBuilder()
-    builder.button(text="📍 Я на месте", callback_data="confirm_location")
+    builder.button(text="📍 Я на месте (гео)", callback_data="confirm_location")
+    builder.button(text="✅ Подтвердить посещение", callback_data="confirm_visit")
     builder.button(text="⏭ Пропустить", callback_data="skip_location")
     builder.button(text="📊 Статистика", callback_data="my_stats")
     builder.button(text="🏠 Главное меню", callback_data="main_menu")
-    builder.adjust(2, 2)
+    builder.adjust(2, 2, 1)
     return builder.as_markup()
 
 def get_retry_skipped_keyboard(user_id):
@@ -813,6 +812,52 @@ async def confirm_location_button(callback: types.CallbackQuery):
         "📍 Пожалуйста, отправьте вашу геопозицию, нажав кнопку ниже.",
         reply_markup=get_share_location_keyboard()
     )
+    await callback.answer()
+
+@dp.callback_query(F.data == "confirm_visit")
+async def confirm_visit_button(callback: types.CallbackQuery, state: FSMContext):
+    """Сразу засчитывает текущую локацию как пройденную."""
+    user_id = callback.from_user.id
+    if not is_user_paid(user_id):
+        await callback.answer("Сначала оплатите доступ!", show_alert=True)
+        return
+
+    data = await state.get_data()
+    current_id = data.get("current_idx")
+    if current_id is None:
+        await callback.answer("Нет активной локации.", show_alert=True)
+        return
+
+    progress = get_user_progress(user_id)
+    if current_id in progress:
+        await callback.answer("Эта локация уже отмечена.", show_alert=True)
+        return
+
+    # Отмечаем как посещённую
+    mark_location(user_id, current_id, 'visited')
+    loc_name = get_location(current_id)["name"]
+    await callback.message.answer(f"✅ Локация «{loc_name}» засчитана как пройденная!")
+    await send_location_info(callback.message.chat.id, current_id)
+
+    # Переходим к следующей
+    unvisited = get_unvisited_locations(user_id)
+    if unvisited:
+        next_id = unvisited[0]
+        await state.update_data(current_idx=next_id)
+        await send_location_with_photo(callback.message.chat.id, next_id)
+    else:
+        await state.update_data(current_idx=None)
+        skipped = get_skipped_locations(user_id)
+        if skipped:
+            await callback.message.answer(
+                "Все локации отмечены. Можете перепройти пропущенные.",
+                reply_markup=get_retry_skipped_keyboard(user_id)
+            )
+        else:
+            await callback.message.answer(
+                "🏆 Вы посетили все локации! Маршрут завершён.\n/start для нового захода.",
+                reply_markup=get_main_menu_keyboard(user_id)
+            )
     await callback.answer()
 
 @dp.callback_query(F.data == "skip_location")
