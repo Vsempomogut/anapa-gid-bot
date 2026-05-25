@@ -256,6 +256,9 @@ class UserAddLocation(StatesGroup):
 class NearbySearchType(StatesGroup):
     waiting_for_location = State()
 
+class AdminGrantAccess(StatesGroup):
+    waiting_for_user_id = State()
+
 # ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
 def db_execute(query, params=(), fetch=False):
     conn = sqlite3.connect('quest.db')
@@ -305,6 +308,16 @@ def is_user_paid(user_id):
         (user_id,), fetch=True
     )
     return bool(row)
+
+def grant_access_to_user(user_id):
+    """Выдаёт доступ пользователю (добавляет запись об успешной оплате)."""
+    if is_user_paid(user_id):
+        return False
+    db_execute(
+        "INSERT INTO payments (payment_id, user_id, amount, status, created_at, completed_at) VALUES (?, ?, 0, 'succeeded', ?, ?)",
+        (f"manual_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}", user_id, datetime.now(), datetime.now())
+    )
+    return True
 
 def get_location(loc_id):
     row = db_execute("SELECT id, name, description, info, lat, lon, photo, type FROM locations WHERE id=?", (loc_id,), fetch=True)
@@ -619,7 +632,6 @@ async def handle_nearby_search(message: types.Message, state: FSMContext):
         await message.answer(text, parse_mode="HTML", reply_markup=ReplyKeyboardRemove())
     else:
         await message.answer("Рядом ничего не найдено.", reply_markup=ReplyKeyboardRemove())
-    # Отправляем главное меню отдельным сообщением
     await bot.send_message(
         chat_id=message.chat.id,
         text="🏙 <b>Главное меню</b>",
@@ -920,7 +932,6 @@ async def handle_location(message: types.Message, state: FSMContext):
         dist = geodesic((message.location.latitude, message.location.longitude), (loc["lat"], loc["lon"])).meters
         builder = InlineKeyboardBuilder()
         builder.button(text="🏠 Главное меню", callback_data="main_menu")
-        # Определяем следующую непосещённую локацию, исключая текущую
         unvisited = get_unvisited_locations(user_id)
         if current_id in unvisited:
             unvisited.remove(current_id)
@@ -933,7 +944,6 @@ async def handle_location(message: types.Message, state: FSMContext):
             reply_markup=builder.as_markup()
         )
 
-# Обработчик для кнопки "Следующая локация"
 @dp.callback_query(F.data.startswith("goto_location_"))
 async def goto_location(callback: types.CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
@@ -1027,10 +1037,12 @@ async def show_admin_panel(target):
     builder.button(text="👥 Пользователи", callback_data="admin_users_info")
     builder.button(text="📍 Управление локациями", callback_data="admin_locations_menu")
     builder.button(text="💰 Управление оплатой", callback_data="admin_payment_settings")
+    builder.button(text="💳 Платежи", callback_data="admin_payments_list")
+    builder.button(text="➕ Доступ по ID", callback_data="admin_grant_access")
     builder.button(text="📩 Сообщения", callback_data="admin_messages")
     builder.button(text="📋 Заявки на добавление", callback_data="admin_location_requests")
     builder.button(text="🔔 Напомнить", callback_data="admin_remind_stuck")
-    builder.adjust(2, 2, 2, 1)
+    builder.adjust(2, 2, 2, 2, 1)
     if isinstance(target, types.Message):
         await target.answer("🔐 <b>Админ-панель</b>", parse_mode="HTML", reply_markup=builder.as_markup())
     else:
@@ -1408,6 +1420,75 @@ async def process_new_location_price(message: Message, state: FSMContext):
         await state.clear()
     await show_admin_panel(message)
 
+# --- Платежи (список оплаченных пользователей) ---
+@dp.callback_query(F.data == "admin_payments_list")
+async def admin_payments_list(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    payments = db_execute("""
+        SELECT p.user_id, u.username, u.first_name, p.amount, p.completed_at
+        FROM payments p
+        LEFT JOIN users u ON p.user_id = u.user_id
+        WHERE p.status = 'succeeded'
+        ORDER BY p.completed_at DESC
+        LIMIT 20
+    """, fetch=True)
+    if not payments:
+        await callback.message.edit_text("Нет успешных платежей.", reply_markup=InlineKeyboardBuilder().button(text="🔙 Назад", callback_data="admin_back").as_markup())
+        await callback.answer()
+        return
+    text = "💳 <b>Оплатившие пользователи:</b>\n\n"
+    for user_id, username, first_name, amount, completed_at in payments:
+        name = username or first_name or f"ID:{user_id}"
+        text += f"• {name} (ID {user_id}) — {amount:.0f}₽, {completed_at[:16]}\n"
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="admin_back")
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.answer()
+
+# --- Доступ по ID ---
+@dp.callback_query(F.data == "admin_grant_access")
+async def admin_grant_access_start(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS: return
+    await state.set_state(AdminGrantAccess.waiting_for_user_id)
+    await callback.message.edit_text("Введите Telegram ID пользователя, которому нужно выдать доступ:")
+    await callback.answer()
+
+@dp.message(StateFilter(AdminGrantAccess.waiting_for_user_id))
+async def admin_grant_access_process(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+    try:
+        user_id = int(message.text)
+        if grant_access_to_user(user_id):
+            await message.answer(f"✅ Доступ выдан пользователю {user_id}.")
+            try:
+                await bot.send_message(user_id, "🎉 Администратор выдал вам доступ к гиду по Анапе! Используйте /start для начала.")
+            except:
+                pass
+            # ----- Уведомление админам -----
+            admin_name = message.from_user.first_name
+            now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
+            for admin_id in ADMIN_IDS:
+                try:
+                    await bot.send_message(
+                        admin_id,
+                        f"🔑 <b>Ручная выдача доступа</b>\n"
+                        f"👤 ID пользователя: <code>{user_id}</code>\n"
+                        f"👨‍💼 Выдал: {admin_name}\n"
+                        f"🕒 Время: {now_str}",
+                        parse_mode="HTML"
+                    )
+                except:
+                    pass
+        else:
+            await message.answer(f"⚠️ У пользователя {user_id} уже есть доступ.")
+    except ValueError:
+        await message.answer("❌ Введите корректный числовой ID.")
+    finally:
+        await state.clear()
+    await show_admin_panel(message)
+
 # --- Сообщения (30 дней) ---
 @dp.callback_query(F.data == "admin_messages")
 async def admin_messages_list(callback: types.CallbackQuery):
@@ -1541,9 +1622,23 @@ async def check_location_payment(callback: types.CallbackQuery):
         if payment.status == "succeeded":
             db_execute("UPDATE location_requests SET status='paid' WHERE id=?", (req_id,))
             await bot.send_message(user_id, "✅ Оплата получена! Администратор скоро добавит вашу локацию на карту.")
-            for admin_id in ADMIN_IDS:
-                await bot.send_message(admin_id, f"✅ Локация «{name}» оплачена. Добавьте её вручную через админ-панель.")
             await callback.answer("Оплата подтверждена.", show_alert=True)
+            # ----- Уведомление админам -----
+            loc_price = get_location_price()
+            now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
+            for admin_id in ADMIN_IDS:
+                try:
+                    await bot.send_message(
+                        admin_id,
+                        f"🏗 <b>Оплата за добавление локации!</b>\n"
+                        f"📍 Локация: {name}\n"
+                        f"👤 ID пользователя: <code>{user_id}</code>\n"
+                        f"💳 Сумма: {loc_price:.0f}₽\n"
+                        f"🕒 Время: {now_str}",
+                        parse_mode="HTML"
+                    )
+                except:
+                    pass
         elif payment.status == "pending":
             await callback.answer("Платёж ещё не завершён.", show_alert=True)
         else:
@@ -1616,6 +1711,23 @@ async def process_payment_check(callback: types.CallbackQuery, state: FSMContext
                        (datetime.now(), payment_id))
             await callback.message.edit_text("✅ Оплата прошла успешно!")
             await main_menu(callback, state)
+            # ----- Уведомление админам -----
+            user = callback.from_user
+            amount = get_price()
+            now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
+            for admin_id in ADMIN_IDS:
+                try:
+                    await bot.send_message(
+                        admin_id,
+                        f"💰 <b>Новая оплата доступа!</b>\n"
+                        f"👤 Имя: {user.first_name}\n"
+                        f"🆔 ID: <code>{user.id}</code>\n"
+                        f"💳 Сумма: {amount:.0f}₽\n"
+                        f"🕒 Время: {now_str}",
+                        parse_mode="HTML"
+                    )
+                except:
+                    pass
         elif payment.status == "pending":
             await callback.answer("⏳ Платёж ещё не завершён. Попробуйте позже.", show_alert=True)
         else:
