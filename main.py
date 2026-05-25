@@ -17,7 +17,7 @@ from geopy.distance import geodesic
 from flask import Flask
 
 # ===== НАСТРОЙКИ =====
-TOKEN = "8675178726:AAHnnPNuVVfI23wwWfEVEK_c0kZUhzALVhY"
+TOKEN = "8675178726:AAFrL3R_GaZi_cqGpNU5Fbgh2dywiniZF2s"
 RADIUS_METERS = 50
 ADMIN_IDS = [5196749531]            # замените на свои Telegram ID
 IMAGES_FOLDER = "images"
