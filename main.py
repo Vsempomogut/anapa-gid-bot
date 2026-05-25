@@ -1,6 +1,5 @@
 #"8675178726:AAHnnPNuVVfI23wwWfEVEK_c0kZUhzALVhY"
 #[5196749531]
-
 import asyncio
 import sqlite3
 import io
@@ -20,9 +19,9 @@ from geopy.distance import geodesic
 from flask import Flask
 
 # ===== НАСТРОЙКИ =====
-TOKEN = "ВАШ_ТОКЕН"
+TOKEN = "8675178726:AAHnnPNuVVfI23wwWfEVEK_c0kZUhzALVhY"
 RADIUS_METERS = 50
-ADMIN_IDS = [123456789]            # замените на свои Telegram ID
+ADMIN_IDS = [5196749531]            # замените на свои Telegram ID
 IMAGES_FOLDER = "images"
 
 logging.basicConfig(level=logging.INFO)
@@ -92,7 +91,13 @@ def init_db():
     c.execute("SELECT COUNT(*) FROM locations")
     if c.fetchone()[0] == 0:
         default_locations = [
-            # ... (полный список из 25 локаций + пример кафе – скопируйте из предыдущего кода)
+            ("Русские ворота", "Остатки турецкой крепости. Отправьте геопозицию, когда окажетесь рядом.",
+             "🏛 <b>Русские ворота</b> — памятник архитектуры XVIII века.\nПостроены в 1783 году как часть турецкой крепости Анапа.\nНазваны в честь 25-летия освобождения города от турок в 1828 году.\nАвтор проекта неизвестен, реставрация проводилась в 1950-х годах.",
+             44.8955, 37.3198, "1.jpg", "attraction"),
+            # ... (все 25 локаций + пример кафе – скопируйте их из предыдущего полного кода)
+            ("Кафе «У моря»", "Уютное кафе с видом на море. Отправьте геопозицию, когда будете рядом.",
+             "🍽 <b>Кафе «У моря»</b> — популярное место с летней верандой.\nРаботает с 2010 года. В меню: блюда европейской и кавказской кухни.\nЧасы работы: 10:00–23:00.",
+             44.8910, 37.3100, "cafe1.jpg", "food")
         ]
         c.executemany(
             "INSERT INTO locations (name, description, info, lat, lon, photo, type) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -446,343 +451,6 @@ def get_share_location_keyboard():
     builder.add(KeyboardButton(text="📍 Отправить геопозицию", request_location=True))
     builder.adjust(1)
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=True)
-
-# ===== ОБРАБОТЧИКИ =====
-@dp.message(Command("start"))
-async def start_cmd(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    register_user(user_id, message.from_user.username, message.from_user.first_name)
-    await message.answer(
-        "🏙 <b>Гид-бот по Анапе</b>\n\nВыберите действие:",
-        parse_mode="HTML",
-        reply_markup=get_main_menu_keyboard(user_id)
-    )
-
-@dp.callback_query(F.data == "main_menu")
-async def main_menu(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-    await callback.message.edit_text("🏙 <b>Главное меню</b>", parse_mode="HTML", reply_markup=get_main_menu_keyboard(user_id))
-    await callback.answer()
-
-@dp.callback_query(F.data == "nearby_all")
-async def nearby_all(callback: types.CallbackQuery, state: FSMContext):
-    if not is_user_paid(callback.from_user.id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    await state.set_state(NearbySearchType.waiting_for_location)
-    await state.update_data(search_filter=None)
-    await callback.message.answer(
-        "📍 Пожалуйста, поделитесь вашим местоположением, чтобы я показал ближайшие интересные места.",
-        reply_markup=get_share_location_keyboard()
-    )
-    await callback.answer()
-
-@dp.callback_query(F.data == "nearby_food")
-async def nearby_food(callback: types.CallbackQuery, state: FSMContext):
-    if not is_user_paid(callback.from_user.id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    await state.set_state(NearbySearchType.waiting_for_location)
-    await state.update_data(search_filter="food")
-    await callback.message.answer(
-        "🍽 Пожалуйста, поделитесь вашим местоположением, чтобы я показал ближайшие заведения.",
-        reply_markup=get_share_location_keyboard()
-    )
-    await callback.answer()
-
-@dp.message(F.location, StateFilter(NearbySearchType.waiting_for_location))
-async def handle_nearby_search(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    data = await state.get_data()
-    filter_type = data.get('search_filter')
-    nearest = find_nearest_locations(message.location.latitude, message.location.longitude, limit=5, filter_type=filter_type)
-    if nearest:
-        title = "🍽 <b>Ближайшие заведения:</b>\n\n" if filter_type == "food" else "📍 <b>Ближайшие места:</b>\n\n"
-        text = title
-        for i, loc in enumerate(nearest, 1):
-            d = loc['distance']
-            if d >= 1000:
-                dist_str = f"{d/1000:.1f} км"
-            else:
-                dist_str = f"{int(d)} м"
-            text += f"{i}. <b>{loc['name']}</b> – {dist_str}\n{loc['description']}\n\n"
-        await message.answer(text, parse_mode="HTML", reply_markup=ReplyKeyboardRemove())
-    else:
-        await message.answer("Рядом ничего не найдено.", reply_markup=ReplyKeyboardRemove())
-    # Отправляем главное меню отдельным сообщением
-    await bot.send_message(
-        chat_id=message.chat.id,
-        text="🏙 <b>Главное меню</b>",
-        parse_mode="HTML",
-        reply_markup=get_main_menu_keyboard(user_id)
-    )
-    await state.clear()
-
-@dp.callback_query(F.data == "add_location_info")
-async def add_location_info(callback: types.CallbackQuery, state: FSMContext):
-    await state.set_state(UserAddLocation.waiting_for_name)
-    await callback.message.edit_text(
-        "📝 <b>Добавление заведения</b>\n\n"
-        "Пожалуйста, введите <b>название</b> заведения:",
-        parse_mode="HTML"
-    )
-    await callback.answer()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ===== ОБРАБОТЧИКИ КВЕСТА =====
-@dp.callback_query(F.data == "start_quest")
-async def start_quest(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-    if not is_user_paid(user_id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    db_execute("DELETE FROM location_progress WHERE user_id = ?", (user_id,))
-    await state.clear()
-    unvisited = get_unvisited_locations(user_id)
-    if unvisited:
-        first_id = unvisited[0]
-        await state.update_data(current_idx=first_id)
-        await send_location_with_photo(callback.message.chat.id, first_id, prefix="🚀 Поехали!\n")
-        await callback.message.edit_text("Маршрут начат!")
-    else:
-        await callback.message.edit_text("Все локации уже посещены, но вы можете перепройти пропущенные.")
-    await callback.answer()
-
-@dp.callback_query(F.data == "continue_quest")
-async def continue_quest(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-    if not is_user_paid(user_id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    unvisited = get_unvisited_locations(user_id)
-    if unvisited:
-        next_id = unvisited[0]
-        await state.update_data(current_idx=next_id)
-        await send_location_with_photo(callback.message.chat.id, next_id)
-        await callback.message.edit_text("📍 Продолжаем!")
-    else:
-        skipped = get_skipped_locations(user_id)
-        if skipped:
-            await callback.message.edit_text(
-                "Все локации отмечены, но вы можете перепройти пропущенные.",
-                reply_markup=get_retry_skipped_keyboard(user_id)
-            )
-        else:
-            await callback.message.edit_text(
-                "🎉 Поздравляем! Все локации посещены!\nИспользуйте /start для нового захода.",
-                reply_markup=get_main_menu_keyboard(user_id)
-            )
-    await callback.answer()
-
-@dp.callback_query(F.data == "retry_skipped")
-async def retry_skipped_menu(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    if not is_user_paid(user_id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    skipped = get_skipped_locations(user_id)
-    if not skipped:
-        await callback.answer("Нет пропущенных локаций.", show_alert=True)
-        return
-    await callback.message.edit_text("🔄 Выберите локацию:", reply_markup=get_retry_skipped_keyboard(user_id))
-    await callback.answer()
-
-@dp.callback_query(F.data.startswith("retry_"))
-async def retry_location(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-    if not is_user_paid(user_id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    loc_id = int(callback.data.split("_")[1])
-    progress = get_user_progress(user_id)
-    if loc_id not in progress or not progress[loc_id]['skipped']:
-        await callback.answer("Эту локацию нельзя перепройти.", show_alert=True)
-        return
-    db_execute("DELETE FROM location_progress WHERE user_id = ? AND location_id = ?", (user_id, loc_id))
-    await state.update_data(current_idx=loc_id)
-    await callback.message.edit_text(f"Можете снова посетить «{get_location(loc_id)['name']}».")
-    await send_location_with_photo(callback.message.chat.id, loc_id)
-    await callback.answer()
-
-@dp.callback_query(F.data == "confirm_location")
-async def confirm_location_button(callback: types.CallbackQuery):
-    await callback.message.answer(
-        "📍 Пожалуйста, отправьте вашу геопозицию, нажав кнопку ниже.",
-        reply_markup=get_share_location_keyboard()
-    )
-    await callback.answer()
-
-@dp.callback_query(F.data == "skip_location")
-async def skip_location(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-    if not is_user_paid(user_id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    data = await state.get_data()
-    current_id = data.get("current_idx")
-    if current_id is None:
-        await callback.answer("Нечего пропускать.", show_alert=True)
-        return
-    progress = get_user_progress(user_id)
-    if current_id in progress:
-        await callback.answer("Эта локация уже отмечена.", show_alert=True)
-        return
-    mark_location(user_id, current_id, 'skipped')
-    await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.message.answer(f"⏭ «{get_location(current_id)['name']}» пропущена.")
-    unvisited = get_unvisited_locations(user_id)
-    if unvisited:
-        next_id = unvisited[0]
-        await state.update_data(current_idx=next_id)
-        await send_location_with_photo(callback.message.chat.id, next_id)
-    else:
-        await state.update_data(current_idx=None)
-        skipped = get_skipped_locations(user_id)
-        if skipped:
-            await callback.message.answer("Все локации отмечены. Можете перепройти пропущенные.", reply_markup=get_retry_skipped_keyboard(user_id))
-        else:
-            await callback.message.answer("🎉 Все локации посещены! Маршрут завершён.", reply_markup=get_main_menu_keyboard(user_id))
-    await callback.answer()
-
-@dp.message(F.location)
-async def handle_location(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    register_user(user_id, message.from_user.username, message.from_user.first_name)
-    if not is_user_paid(user_id):
-        await message.answer("❌ Доступ платный. Нажмите /start и оплатите.")
-        return
-
-    current_state = await state.get_state()
-    if current_state is None:
-        return
-
-    if current_state == NearbySearchType.waiting_for_location.state:
-        data = await state.get_data()
-        filter_type = data.get('search_filter')
-        nearest = find_nearest_locations(message.location.latitude, message.location.longitude, limit=5, filter_type=filter_type)
-        if nearest:
-            title = "🍽 <b>Ближайшие заведения:</b>\n\n" if filter_type == "food" else "📍 <b>Ближайшие места:</b>\n\n"
-            text = title
-            for i, loc in enumerate(nearest, 1):
-                d = loc['distance']
-                if d >= 1000:
-                    dist_str = f"{d/1000:.1f} км"
-                else:
-                    dist_str = f"{int(d)} м"
-                text += f"{i}. <b>{loc['name']}</b> – {dist_str}\n{loc['description']}\n\n"
-            await message.answer(text, parse_mode="HTML", reply_markup=ReplyKeyboardRemove())
-        else:
-            await message.answer("Рядом ничего не найдено.", reply_markup=ReplyKeyboardRemove())
-        await bot.send_message(
-            chat_id=message.chat.id,
-            text="🏙 <b>Главное меню</b>",
-            parse_mode="HTML",
-            reply_markup=get_main_menu_keyboard(user_id)
-        )
-        await state.clear()
-        return
-
-    # Квест активен
-    data = await state.get_data()
-    current_id = data.get("current_idx")
-    if current_id is None:
-        unvisited = get_unvisited_locations(user_id)
-        if not unvisited:
-            await message.answer("Все локации отмечены.")
-            return
-        current_id = unvisited[0]
-        await state.update_data(current_idx=current_id)
-
-    loc = get_location(current_id)
-    if not loc:
-        await message.answer("Локация не найдена.")
-        return
-    progress = get_user_progress(user_id)
-    if current_id in progress:
-        await message.answer("Эта локация уже отмечена. Ищем следующую...")
-        unvisited = get_unvisited_locations(user_id)
-        if unvisited:
-            current_id = unvisited[0]
-            await state.update_data(current_idx=current_id)
-            loc = get_location(current_id)
-        else:
-            await message.answer("Все локации отмечены.")
-            return
-
-    if is_nearby(message.location.latitude, message.location.longitude, loc["lat"], loc["lon"]):
-        await message.answer(f"✅ «{loc['name']}» пройдена!")
-        mark_location(user_id, current_id, 'visited')
-        await send_location_info(message.chat.id, current_id)
-        unvisited = get_unvisited_locations(user_id)
-        if unvisited:
-            next_id = unvisited[0]
-            await state.update_data(current_idx=next_id)
-            await send_location_with_photo(message.chat.id, next_id)
-        else:
-            await state.update_data(current_idx=None)
-            skipped = get_skipped_locations(user_id)
-            if skipped:
-                await message.answer("Все локации отмечены. Можете перепройти пропущенные.", reply_markup=get_retry_skipped_keyboard(user_id))
-            else:
-                await message.answer("🏆 Вы посетили все локации! Маршрут завершён.\n/start для нового захода.", reply_markup=get_main_menu_keyboard(user_id))
-    else:
-        # Пользователь не на месте
-        dist = geodesic((message.location.latitude, message.location.longitude), (loc["lat"], loc["lon"])).meters
-        builder = InlineKeyboardBuilder()
-        builder.button(text="🏠 Главное меню", callback_data="main_menu")
-        # Определяем следующую непосещённую локацию, исключая текущую
-        unvisited = get_unvisited_locations(user_id)
-        # Убираем текущую, если она в списке
-        if current_id in unvisited:
-            unvisited.remove(current_id)
-        if unvisited:
-            next_id = unvisited[0]
-            builder.button(text="📍 Следующая локация", callback_data=f"goto_location_{next_id}")
-        builder.adjust(1)
-        await message.answer(
-            f"❌ Вы не на месте! До «{loc['name']}» ещё {dist:.0f} м.\n\nВыберите действие:",
-            reply_markup=builder.as_markup()
-        )
-
-# Обработчик для кнопки "Следующая локация"
-@dp.callback_query(F.data.startswith("goto_location_"))
-async def goto_location(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-    if not is_user_paid(user_id):
-        await callback.answer("Сначала оплатите доступ!", show_alert=True)
-        return
-    loc_id = int(callback.data.split("_")[2])
-    progress = get_user_progress(user_id)
-    if loc_id in progress:
-        await callback.answer("Эта локация уже отмечена.", show_alert=True)
-        return
-    await state.update_data(current_idx=loc_id)
-    await send_location_with_photo(callback.message.chat.id, loc_id)
-    await callback.message.edit_text("📍 Перешли к следующей локации.")
-    await callback.answer()
-
-
-
-
-
-
-
-
-
-
-
 
 # ===== ОБРАБОТЧИКИ =====
 @dp.message(Command("start"))
@@ -1728,7 +1396,6 @@ async def remind_stuck(callback: types.CallbackQuery):
             pass
     await callback.answer(f"Отправлено {count} напоминаний.", show_alert=True)
 
-
 # ===== ЗАПУСК =====
 async def main():
     try:
@@ -1737,9 +1404,6 @@ async def main():
     except Exception as e:
         print(f"Ошибка: {e}")
         sys.exit(1)
-
-if __name__ == "__main__":
-    asyncio.run(main())
 
 if __name__ == "__main__":
     asyncio.run(main())
