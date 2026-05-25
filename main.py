@@ -23,7 +23,7 @@ ADMIN_IDS = [5196749531]            # замените на свои Telegram ID
 IMAGES_FOLDER = "images"
 
 YOOKASSA_SHOP_ID = "1363267"
-YOOKASSA_SECRET_KEY = "live_XjLtEtimRDR0qeJRjN3wh0YnfzHXJf18sQ30-XBfTuk"
+YOOKASSA_SECRET_KEY = "live_H41L9dZ8wLtXhff7pDkjqDGjB-d1_ItDuVrLbHua7nM"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
