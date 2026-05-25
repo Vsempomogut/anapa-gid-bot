@@ -485,7 +485,7 @@ async def create_payment_async(amount, description, metadata):
             "amount": {"value": f"{amount:.2f}", "currency": "RUB"},
             "confirmation": {
                 "type": "redirect",
-                "return_url": "https://t.me/anapa_gid_bot"
+                #"return_url": "https://t.me/anapa_gid_bot"
             },
             "capture": True,
             "description": description,
