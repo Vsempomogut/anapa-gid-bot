@@ -308,7 +308,6 @@ def is_user_paid(user_id):
     return bool(row)
 
 def grant_access_to_user(user_id):
-    """Выдаёт доступ пользователю (добавляет запись об успешной оплате)."""
     if is_user_paid(user_id):
         return False
     db_execute(
@@ -431,7 +430,7 @@ def get_photo_path(loc):
             return path
     return None
 
-def find_nearest_locations(lat, lon, limit=5, filter_type=None):
+def find_nearest_locations(lat, lon, limit=3, filter_type=None):
     locs = []
     for loc_id in get_all_location_ids():
         loc = get_location(loc_id)
@@ -449,7 +448,19 @@ def find_nearest_locations(lat, lon, limit=5, filter_type=None):
         result.append(loc_copy)
     return result
 
-async def send_location_with_photo(chat_id, loc_id, prefix=""):
+def get_map_buttons(loc, user_lat=None, user_lon=None):
+    builder = InlineKeyboardBuilder()
+    if user_lat and user_lon:
+        google_url = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={loc['lat']},{loc['lon']}&travelmode=walking"
+        yandex_url = f"https://yandex.ru/maps/?rtext={user_lat},{user_lon}~{loc['lat']},{loc['lon']}&rtt=pd"
+    else:
+        google_url = f"https://www.google.com/maps/place/@{loc['lat']},{loc['lon']},17z"
+        yandex_url = f"https://yandex.ru/maps/?pt={loc['lon']},{loc['lat']}&z=17"
+    builder.button(text="🗺 Google", url=google_url)
+    builder.button(text="📍 Яндекс", url=yandex_url)
+    return builder.as_markup()
+
+async def send_location_with_photo(chat_id, loc_id, prefix="", user_lat=None, user_lon=None):
     loc = get_location(loc_id)
     if not loc:
         await bot.send_message(chat_id, "Локация не найдена.")
@@ -458,21 +469,18 @@ async def send_location_with_photo(chat_id, loc_id, prefix=""):
     total = get_locations_count()
     stats = get_user_stats(chat_id)
     progress_bar = "▓" * stats['visited'] + "░" * (total - stats['visited'])
-    
-    # Показываем всю информацию сразу, включая координаты
     full_info = loc['info'] if loc['info'] else loc['description']
     caption = (f"{prefix}📍 <b>{loc['name']}</b>\n\n"
                f"{full_info}\n\n"
                f"Прогресс: {progress_bar} ({stats['visited']}/{total})\n\n"
                f"Нажмите «✅ Подтвердить посещение» или «📍 Я на месте (гео)».")
-    
+    map_buttons = get_map_buttons(loc, user_lat, user_lon)
     if photo_path:
-        await bot.send_photo(chat_id, FSInputFile(photo_path), caption=caption, parse_mode="HTML", reply_markup=get_quest_keyboard())
+        await bot.send_photo(chat_id, FSInputFile(photo_path), caption=caption, parse_mode="HTML", reply_markup=map_buttons)
     else:
-        await bot.send_message(chat_id, caption, parse_mode="HTML", reply_markup=get_quest_keyboard())
+        await bot.send_message(chat_id, caption, parse_mode="HTML", reply_markup=map_buttons)
 
 async def send_location_info(chat_id, loc_id):
-    # Функция больше не нужна, т.к. информация показывается сразу в send_location_with_photo
     pass
 
 # ===== КЛАВИАТУРЫ =====
@@ -542,7 +550,7 @@ async def create_payment_async(amount, description, metadata):
             "amount": {"value": f"{amount:.2f}", "currency": "RUB"},
             "confirmation": {
                 "type": "redirect",
-                "return_url": "https://t.me/anapa_gid_bot"  # Замените на ваш username бота
+                "return_url": "https://t.me/anapa_gid_bot"
             },
             "capture": True,
             "description": description,
@@ -609,30 +617,24 @@ async def handle_nearby_search(message: types.Message, state: FSMContext):
     user_lon = message.location.longitude
     data = await state.get_data()
     filter_type = data.get('search_filter')
-    nearest = find_nearest_locations(user_lat, user_lon, limit=5, filter_type=filter_type)
-    
+    nearest = find_nearest_locations(user_lat, user_lon, limit=3, filter_type=filter_type)
     if nearest:
         title = "🍽 <b>Ближайшие заведения:</b>\n\n" if filter_type == "food" else "📍 <b>Ближайшие места:</b>\n\n"
         first = True
         for loc in nearest:
             d = loc['distance']
             dist_str = f"{d/1000:.1f} км" if d >= 1000 else f"{int(d)} м"
-            # Формируем клавиатуру с кнопкой "Проложить маршрут"
-            builder = InlineKeyboardBuilder()
-            map_url = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={loc['lat']},{loc['lon']}&travelmode=walking"
-            builder.button(text="🗺 Проложить маршрут", url=map_url)
-            # Отправляем каждую локацию отдельным сообщением
+            map_buttons = get_map_buttons(loc, user_lat, user_lon)
             full_info = loc['info'] if loc['info'] else loc['description']
             loc_text = f"{title if first else ''}<b>{loc['name']}</b> – {dist_str}\n{full_info}"
             first = False
             photo_path = get_photo_path(loc)
             if photo_path:
-                await message.answer_photo(FSInputFile(photo_path), caption=loc_text, parse_mode="HTML", reply_markup=builder.as_markup())
+                await message.answer_photo(FSInputFile(photo_path), caption=loc_text, parse_mode="HTML", reply_markup=map_buttons)
             else:
-                await message.answer(loc_text, parse_mode="HTML", reply_markup=builder.as_markup())
+                await message.answer(loc_text, parse_mode="HTML", reply_markup=map_buttons)
     else:
         await message.answer("Рядом ничего не найдено.", reply_markup=ReplyKeyboardRemove())
-    
     await bot.send_message(chat_id=message.chat.id, text="🏙 <b>Главное меню</b>", parse_mode="HTML", reply_markup=get_main_menu_keyboard(user_id))
     await state.clear()
 
@@ -813,29 +815,22 @@ async def confirm_location_button(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "confirm_visit")
 async def confirm_visit_button(callback: types.CallbackQuery, state: FSMContext):
-    """Сразу засчитывает текущую локацию как пройденную."""
     user_id = callback.from_user.id
     if not is_user_paid(user_id):
         await callback.answer("Сначала оплатите доступ!", show_alert=True)
         return
-
     data = await state.get_data()
     current_id = data.get("current_idx")
     if current_id is None:
         await callback.answer("Нет активной локации.", show_alert=True)
         return
-
     progress = get_user_progress(user_id)
     if current_id in progress:
         await callback.answer("Эта локация уже отмечена.", show_alert=True)
         return
-
-    # Отмечаем как посещённую
     mark_location(user_id, current_id, 'visited')
     loc_name = get_location(current_id)["name"]
     await callback.message.answer(f"✅ Локация «{loc_name}» засчитана как пройденная!")
-
-    # Переходим к следующей
     unvisited = get_unvisited_locations(user_id)
     if unvisited:
         next_id = unvisited[0]
@@ -895,16 +890,12 @@ async def handle_location(message: types.Message, state: FSMContext):
     if not is_user_paid(user_id):
         await message.answer("❌ Доступ платный. Нажмите /start и оплатите.")
         return
-
     current_state = await state.get_state()
     if current_state is None:
         return
-
     if current_state == NearbySearchType.waiting_for_location.state:
         await handle_nearby_search(message, state)
         return
-
-    # Квест активен
     data = await state.get_data()
     current_id = data.get("current_idx")
     if current_id is None:
@@ -914,7 +905,6 @@ async def handle_location(message: types.Message, state: FSMContext):
             return
         current_id = unvisited[0]
         await state.update_data(current_idx=current_id)
-
     loc = get_location(current_id)
     if not loc:
         await message.answer("Локация не найдена.")
@@ -930,7 +920,6 @@ async def handle_location(message: types.Message, state: FSMContext):
         else:
             await message.answer("Все локации отмечены.")
             return
-
     if is_nearby(message.location.latitude, message.location.longitude, loc["lat"], loc["lon"]):
         await message.answer(f"✅ «{loc['name']}» пройдена!")
         mark_location(user_id, current_id, 'visited')
@@ -1105,16 +1094,13 @@ async def show_period_stats(callback, period):
         since = now - timedelta(days=30)
     else:
         since = datetime(2000, 1, 1)
-
     total_users = db_execute("SELECT COUNT(*) FROM users WHERE start_date >= ?", (since,), fetch=True)[0][0]
     active_users = db_execute("SELECT COUNT(DISTINCT user_id) FROM location_progress WHERE timestamp >= ?", (since,), fetch=True)[0][0]
     completed_users = db_execute("SELECT COUNT(DISTINCT user_id) FROM location_progress WHERE visited = 1 AND timestamp >= ?", (since,), fetch=True)[0][0]
-
     text = (f"📊 <b>Статистика за {period}</b>\n\n"
             f"👥 Новых пользователей: {total_users}\n"
             f"🎮 Активных (отмечались): {active_users}\n"
             f"🏆 Посетили локации: {completed_users}")
-
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardBuilder().button(text="🔙 Назад", callback_data="admin_stats_menu").as_markup())
     await callback.answer()
 
@@ -1314,7 +1300,6 @@ async def process_edit_value(message: Message, state: FSMContext):
             dest_path = os.path.join(IMAGES_FOLDER, new_filename)
             await bot.download(file, destination=dest_path)
             value = new_filename
-        # иначе текстовое имя файла
     update_location_field(loc_id, field, value)
     await state.clear()
     await message.answer("✅ Локация обновлена.")
@@ -1484,7 +1469,6 @@ async def admin_grant_access_process(message: Message, state: FSMContext):
                 await bot.send_message(user_id, "🎉 Администратор выдал вам доступ к гиду по Анапе! Используйте /start для начала.")
             except:
                 pass
-            # ----- Уведомление админам -----
             admin_name = message.from_user.first_name
             now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
             for admin_id in ADMIN_IDS:
@@ -1641,7 +1625,6 @@ async def check_location_payment(callback: types.CallbackQuery):
             db_execute("UPDATE location_requests SET status='paid' WHERE id=?", (req_id,))
             await bot.send_message(user_id, "✅ Оплата получена! Администратор скоро добавит вашу локацию на карту.")
             await callback.answer("Оплата подтверждена.", show_alert=True)
-            # ----- Уведомление админам -----
             loc_price = get_location_price()
             now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
             for admin_id in ADMIN_IDS:
@@ -1729,7 +1712,6 @@ async def process_payment_check(callback: types.CallbackQuery, state: FSMContext
                        (datetime.now(), payment_id))
             await callback.message.edit_text("✅ Оплата прошла успешно!")
             await main_menu(callback, state)
-            # ----- Уведомление админам -----
             user = callback.from_user
             amount = get_price()
             now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
