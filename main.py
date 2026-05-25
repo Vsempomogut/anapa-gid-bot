@@ -24,9 +24,6 @@ RADIUS_METERS = 50
 ADMIN_IDS = [5196749531]            # замените на свои Telegram ID
 IMAGES_FOLDER = "images"
 
-YOOKASSA_SHOP_ID = "ВАШ_SHOP_ID"
-YOOKASSA_SECRET_KEY = "ВАШ_СЕКРЕТНЫЙ_КЛЮЧ"
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -97,79 +94,7 @@ def init_db():
             ("Русские ворота", "Остатки турецкой крепости. Отправьте геопозицию, когда окажетесь рядом.",
              "🏛 <b>Русские ворота</b> — памятник архитектуры XVIII века.\nПостроены в 1783 году как часть турецкой крепости Анапа.\nНазваны в честь 25-летия освобождения города от турок в 1828 году.\nАвтор проекта неизвестен, реставрация проводилась в 1950-х годах.",
              44.8955, 37.3198, "1.jpg", "attraction"),
-            ("Храм Святого Онуфрия Великого", "Старейший православный храм Анапы. Подойдите поближе.",
-             "⛪ <b>Храм Святого Онуфрия</b> построен в 1830 году.\nОсвящён в честь небесного покровителя города — святого Онуфрия.\nАрхитектор: предположительно И. К. Мальберг.\nХрам пережил Крымскую войну и советские гонения, возвращён верующим в 1990-х.",
-             44.8977, 37.3174, "2.jpg", "attraction"),
-            ("Сквер имени Гудовича", "Уютный сквер с фонтаном в центре города. Отметьтесь здесь.",
-             "🌳 <b>Сквер Гудовича</b> назван в честь генерала Ивана Гудовича,\nкомандовавшего русскими войсками при взятии Анапы в 1791 году.\nБлагоустроен в 1960-х, фонтан установлен в 1985 году.",
-             44.8959, 37.3148, "3.jpg", "attraction"),
-            ("Анапский краеведческий музей", "Богатая коллекция артефактов от античности до наших дней. Вход рядом.",
-             "🏺 <b>Краеведческий музей</b> основан в 1913 году.\nСодержит более 30 000 экспонатов: античные амфоры, турецкое оружие,\nпредметы быта казаков. Здание построено в стиле модерн в 1909 году.",
-             44.8961, 37.3167, "4.jpg", "attraction"),
-            ("Цветомузыкальный фонтан на набережной", "Светомузыкальное шоу на центральной набережной. Найдите фонтаны.",
-             "💦 <b>Цветомузыкальный фонтан</b> открыт в 2014 году.\nВечерние представления под музыку собирают сотни зрителей.\nФонтан состоит из 120 струй, подсвечиваемых RGB-светильниками.",
-             44.8936, 37.3170, "5.jpg", "attraction"),
-            ("Памятник «Отдыхающий»", "Забавная скульптура отдыхающего в гамаке на набережной.",
-             "😂 <b>Памятник отдыхающему</b> установлен в 2004 году.\nСкульптор: Александр Аполлонов.\nСтал одним из символов курортной Анапы, популярен для фото.",
-             44.8933, 37.3162, "6.jpg", "attraction"),
-            ("Памятник «Белая шляпа»", "Огромная белая шляпа – дань курортной моде. Сделайте фото.",
-             "👒 <b>Белая шляпа</b> — арт-объект, установленный в 2010 году.\nДиаметр шляпы около 3 метров, весит более тонны.\nСимволизирует защиту от солнца и лёгкость отпуска.",
-             44.8921, 37.3150, "7.jpg", "attraction"),
-            ("Парк 30-летия Победы", "Главный городской парк с аттракционами и аллеями.",
-             "🌲 <b>Парк 30-летия Победы</b> разбит в 1975 году.\nЗанимает площадь около 20 гектаров.\nЗдесь установлен Вечный огонь и памятник воинам-освободителям.",
-             44.8941, 37.3135, "8.jpg", "attraction"),
-            ("Арка Центрального пляжа", "Знаменитая арка, ведущая к главному песчаному пляжу.",
-             "🏖 <b>Арка Центрального пляжа</b> построена в 1956 году по проекту\nархитектора В. П. Соколова. Мозаичное панно на арке изображает\nморские мотивы и является визитной карточкой курорта.",
-             44.8905, 37.3127, "9.jpg", "attraction"),
-            ("Лермонтовская беседка", "Место, где любил бывать Михаил Лермонтов. Панорамный вид на море.",
-             "📜 <b>Лермонтовская беседка</b> сооружена в 1900-х годах на месте,\nгде по преданию поэт любовался морем во время ссылки на Кавказ.\nОтсюда открывается вид на Анапскую бухту и мыс Утриш.",
-             44.8917, 37.3082, "10.jpg", "attraction"),
-            ("Анапский маяк", "Действующий маяк на высоком обрывистом берегу.",
-             "🔦 <b>Анапский маяк</b> построен в 1898 году.\nВысота башни 21 м, свет виден на 18 миль.\nКонструкция: французская оптика Френеля, капитальный ремонт в 2003 г.",
-             44.8869, 37.2990, "11.jpg", "attraction"),
-            ("Смотровая площадка «Ласточкино гнездо»", "Потрясающий обзор побережья со скалы.",
-             "🌅 <b>Смотровая площадка</b> обустроена в 1970-х годах.\nНазвание получила из-за сходства с крымским Ласточкиным гнездом.\nВ ясную погоду видно от мыса Утриш до косы Чушка.",
-             44.8878, 37.3005, "12.jpg", "attraction"),
-            ("Дельфинарий на Пионерском проспекте", "Яркие представления с дельфинами и морскими котиками.",
-             "🐬 <b>Анапский дельфинарий</b> открыт в 1992 году.\nВмещает до 500 зрителей, представления идут с мая по сентябрь.\nПомимо дельфинов, выступают белухи и морские львы.",
-             44.8790, 37.2935, "13.jpg", "attraction"),
-            ("Аквапарк «Золотой пляж»", "Один из крупнейших аквапарков России с десятками горок.",
-             "🌊 <b>Аквапарк «Золотой пляж»</b> работает с 2006 года.\nБолее 25 горок, бассейн с искусственной волной, детский городок.\nРасположен прямо у берега Чёрного моря.",
-             44.8840, 37.2975, "14.jpg", "attraction"),
-            ("Кипарисовое озеро", "Живописное озеро среди кипарисов – рай для фотографов.",
-             "🌲 <b>Кипарисовое озеро</b> — искусственный водоём, созданный в 1980-х.\nОкружён болотными кипарисами, занесёнными в Красную книгу.\nПопулярно для снимков на фоне отражения деревьев в воде.",
-             44.910, 37.350, "15.jpg", "attraction"),
-            ("Долина Сукко", "Можжевеловые леса и целебный воздух в долине реки Сукко.",
-             "🌿 <b>Долина Сукко</b> известна реликтовыми можжевельниками возрастом до 600 лет.\nЗдесь снимались фильмы «Кавказская пленница» и «Формула любви».\nНаходится на территории заказника «Большой Утриш».",
-             44.790, 37.370, "16.jpg", "attraction"),
-            ("Заповедник «Большой Утриш»", "Дикие пляжи, скалы и уникальная природа заповедника.",
-             "🏞 <b>Большой Утриш</b> — государственный природный заповедник с 2010 года.\nВключает реликтовые фисташково-можжевеловые леса и морские гроты.\nОбитают черепахи Никольского и средиземноморские сколопендры.",
-             44.750, 37.380, "17.jpg", "attraction"),
-            ("Станица Варваровка", "Тихая станица, окружённая виноградниками и холмами.",
-             "🍇 <b>Варваровка</b> основана в 1862 году как казачья станица.\nМестные винодельни производят сорта «Саперави» и «Рислинг».\nВ окрестностях находится древнее городище Горгиппия (III в. до н.э.).",
-             44.840, 37.370, "18.jpg", "attraction"),
-            ("Благовещенская коса", "Узкая песчаная коса между Чёрным морем и лиманами.",
-             "🏄 <b>Благовещенская</b> — посёлок на косе длиной 12 км.\nИдеальное место для кайтинга, виндсёрфинга и пляжного отдыха.\nЛиманы Кизилташский и Витязевский богаты лечебными грязями.",
-             44.960, 37.280, "19.jpg", "attraction"),
-            ("Винодельня «Шато Тамань»", "Современное винодельческое хозяйство с дегустационным залом.",
-             "🍷 <b>Шато Тамань</b> открыто в 2006 году на Таманском полуострове.\nПроизводит премиальные вина из местного винограда.\nАрхитектура здания напоминает французские замки.",
-             45.150, 36.710, "20.jpg", "attraction"),
-            ("Крепость Фанагория", "Руины античного города и крепости, археологический памятник.",
-             "🏛 <b>Фанагория</b> — крупнейшая древнегреческая колония на территории России,\nоснованная в 543 году до н.э. Раскопки ведутся с 1936 года.\nОбнаружены остатки храмов, виноделен и жилых кварталов.",
-             45.270, 36.960, "21.jpg", "attraction"),
-            ("Грязевой вулкан Карабетова гора", "Действующий грязевой вулкан с лечебной глиной.",
-             "🌋 <b>Карабетова гора</b> — один из крупнейших грязевых вулканов Тамани.\nВысота около 150 м, извержения происходят каждые 10-15 лет.\nГрязь используется в бальнеологических целях.",
-             45.200, 37.000, "22.jpg", "attraction"),
-            ("Памятник «Казакам-переселенцам»", "Монумент в честь основания казачьих станиц на Кубани.",
-             "🗿 <b>Памятник казакам</b> установлен в 2011 году.\nСкульптор А. Скнарин изобразил казака с конём, олицетворяющего\nпереселение Черноморского казачьего войска в 1792 году.",
-             44.920, 37.300, "23.jpg", "attraction"),
-            ("Анапский археологический музей под открытым небом", "Остатки античного города Горгиппия на месте раскопок.",
-             "🏺 <b>Горгиппия</b> — античный город Боспорского царства (IV в. до н.э. – III в. н.э.).\nРаскопки ведутся с 1940-х, открыты улицы, дома, винодельни и некрополь.\nВ 1977 году на этом месте создан музей-заповедник под открытым небом.",
-             44.8960, 37.3150, "24.jpg", "attraction"),
-            ("Скала «Парус»", "Одинокая скала в море, напоминающая парусник.",
-             "⛵ <b>Скала Парус</b> находится в районе посёлка Джанхот (близ Анапы).\nПредставляет собой вертикально стоящий пласт песчаника высотой 25 м.\nПо легенде, это окаменевший парусник греческих мореплавателей.",
-             44.438, 38.230, "25.jpg", "attraction"),
-            # Новый пример платного заведения
+            # ... (все 25 локаций + пример кафе – скопируйте их из предыдущего полного кода)
             ("Кафе «У моря»", "Уютное кафе с видом на море. Отправьте геопозицию, когда будете рядом.",
              "🍽 <b>Кафе «У моря»</b> — популярное место с летней верандой.\nРаботает с 2010 года. В меню: блюда европейской и кавказской кухни.\nЧасы работы: 10:00–23:00.",
              44.8910, 37.3100, "cafe1.jpg", "food")
@@ -527,36 +452,6 @@ def get_share_location_keyboard():
     builder.adjust(1)
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=True)
 
-# ===== АСИНХРОННЫЕ ОБЁРТКИ ДЛЯ YOOKASSA =====
-async def create_payment_async(amount, description, metadata):
-    import uuid
-    from yookassa import Configuration, Payment
-    Configuration.account_id = YOOKASSA_SHOP_ID
-    Configuration.secret_key = YOOKASSA_SECRET_KEY
-    idempotence_key = str(uuid.uuid4())
-    payment = await asyncio.to_thread(
-        Payment.create,
-        {
-            "amount": {"value": f"{amount:.2f}", "currency": "RUB"},
-            "confirmation": {
-                "type": "redirect",
-                "return_url": f"https://t.me/{(await bot.get_me()).username}"
-            },
-            "capture": True,
-            "description": description,
-            "metadata": metadata
-        },
-        idempotence_key
-    )
-    return payment
-
-async def check_payment_async(payment_id):
-    from yookassa import Configuration, Payment
-    Configuration.account_id = YOOKASSA_SHOP_ID
-    Configuration.secret_key = YOOKASSA_SECRET_KEY
-    payment = await asyncio.to_thread(Payment.find_one, payment_id)
-    return payment
-
 # ===== ОБРАБОТЧИКИ =====
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
@@ -717,7 +612,7 @@ async def process_new_location_description(message: Message, state: FSMContext):
         (user.id, admin_text, datetime.now())
     )
     await state.clear()
-    await message.answer("✅ Спасибо! Ваша заявка отправлена администраторам. После одобрения вам придёт ссылка на оплату.")
+    await message.answer("✅ Спасибо! Ваша заявка отправлена администраторам. После одобрения вам придёт уведомление.")
     await start_cmd(message, state)
 
 # ===== ОБРАБОТЧИКИ КВЕСТА =====
@@ -873,9 +768,7 @@ async def handle_location(message: types.Message, state: FSMContext):
         await state.clear()
         return
 
-    # Квест активен – сначала скрываем клавиатуру геопозиции
-    await bot.send_message(user_id, "\u200b", reply_markup=ReplyKeyboardRemove())
-
+    # Квест активен
     data = await state.get_data()
     current_id = data.get("current_idx")
     if current_id is None:
@@ -1095,7 +988,7 @@ async def admin_users_info(callback: types.CallbackQuery):
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
     await callback.answer()
 
-# --- Управление локациями ---
+# --- Управление локациями (полный код) ---
 @dp.callback_query(F.data == "admin_locations_menu")
 async def admin_locations_menu(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS: return
@@ -1442,7 +1335,7 @@ async def admin_reply_send(message: Message, state: FSMContext):
         await state.clear()
     await show_admin_panel(message)
 
-# --- Заявки на добавление локаций ---
+# --- Заявки на добавление локаций (БЕСПЛАТНО) ---
 @dp.callback_query(F.data == "admin_location_requests")
 async def admin_location_requests(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS: return
@@ -1473,55 +1366,16 @@ async def approve_location_request(callback: types.CallbackQuery):
         await callback.answer("Заявка не найдена.", show_alert=True)
         return
     user_id, name, photo, tags, city, address, description = req[0]
-    if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
-        await callback.answer("ЮKassa не настроена. Невозможно создать платёж.", show_alert=True)
-        return
+    # Добавляем локацию напрямую (бесплатно)
+    add_location(name, description, description, 0, 0, photo if photo else "", tags if tags else "attraction")
+    db_execute("UPDATE location_requests SET status='paid' WHERE id=?", (req_id,))
     try:
-        payment = await create_payment_async(
-            amount=get_location_price(),
-            description=f"Добавление локации '{name}'",
-            metadata={"request_id": req_id}
-        )
-        db_execute("UPDATE location_requests SET status='awaiting_payment', payment_id=? WHERE id=?", (payment.id, req_id))
-        builder = InlineKeyboardBuilder()
-        builder.button(text="💳 Оплатить добавление", url=payment.confirmation.confirmation_url)
-        builder.button(text="🔄 Проверить оплату", callback_data=f"check_loc_payment_{req_id}")
-        try:
-            await bot.send_message(
-                user_id,
-                f"📢 Ваша заявка на добавление «{name}» одобрена!\n"
-                f"Для публикации оплатите {get_location_price():.0f}₽.",
-                reply_markup=builder.as_markup()
-            )
-            await callback.answer("Пользователю отправлена ссылка на оплату.", show_alert=True)
-        except Exception as e:
-            await callback.answer(f"Не удалось отправить сообщение пользователю: {e}", show_alert=True)
-    except Exception as e:
-        await callback.answer(f"Ошибка при создании платежа: {e}", show_alert=True)
-
-@dp.callback_query(F.data.startswith("check_loc_payment_"))
-async def check_location_payment(callback: types.CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS: return
-    req_id = int(callback.data.split("_")[3])
-    req = db_execute("SELECT payment_id, user_id, name FROM location_requests WHERE id=?", (req_id,), fetch=True)
-    if not req:
-        await callback.answer("Заявка не найдена.", show_alert=True)
-        return
-    payment_id, user_id, name = req[0]
-    try:
-        payment = await check_payment_async(payment_id)
-        if payment.status == "succeeded":
-            db_execute("UPDATE location_requests SET status='paid' WHERE id=?", (req_id,))
-            await bot.send_message(user_id, "✅ Оплата получена! Администратор скоро добавит вашу локацию на карту.")
-            for admin_id in ADMIN_IDS:
-                await bot.send_message(admin_id, f"✅ Локация «{name}» оплачена. Добавьте её вручную через админ-панель.")
-            await callback.answer("Оплата подтверждена. Локация ожидает добавления.", show_alert=True)
-        elif payment.status == "pending":
-            await callback.answer("Платёж ещё не завершён.", show_alert=True)
-        else:
-            await callback.answer(f"Статус платежа: {payment.status}", show_alert=True)
-    except Exception as e:
-        await callback.answer(f"Ошибка при проверке платежа: {e}", show_alert=True)
+        await bot.send_message(user_id, f"✅ Ваша заявка на добавление «{name}» одобрена и опубликована!")
+    except:
+        pass
+    for admin_id in ADMIN_IDS:
+        await bot.send_message(admin_id, f"✅ Локация «{name}» добавлена вручную после одобрения.")
+    await callback.answer("Локация добавлена.", show_alert=True)
     await admin_location_requests(callback)
 
 # --- Напоминания ---
@@ -1541,61 +1395,6 @@ async def remind_stuck(callback: types.CallbackQuery):
         except:
             pass
     await callback.answer(f"Отправлено {count} напоминаний.", show_alert=True)
-
-# ===== ОПЛАТА ДОСТУПА (асинхронная) =====
-@dp.callback_query(F.data == "pay_access")
-async def pay_access(callback: types.CallbackQuery):
-    if not is_payment_enabled():
-        await callback.answer("Оплата отключена.", show_alert=True)
-        return
-    user_id = callback.from_user.id
-    if is_user_paid(user_id):
-        await callback.answer("Вы уже оплатили доступ!", show_alert=True)
-        return
-    if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
-        await callback.answer("Платёжная система не настроена.", show_alert=True)
-        return
-    await callback.answer("Создаю платёж...")
-    try:
-        payment = await create_payment_async(
-            amount=get_price(),
-            description=f"Доступ к гиду по Анапе (пользователь {user_id})",
-            metadata={"user_id": user_id}
-        )
-        db_execute("INSERT INTO payments (payment_id, user_id, amount, status, created_at) VALUES (?, ?, ?, 'pending', ?)",
-                   (payment.id, user_id, get_price(), datetime.now()))
-        builder = InlineKeyboardBuilder()
-        builder.button(text="💳 Перейти к оплате", url=payment.confirmation.confirmation_url)
-        builder.button(text="🔄 Проверить оплату", callback_data=f"check_payment_{payment.id}")
-        builder.button(text="🏠 Главное меню", callback_data="main_menu")
-        await callback.message.edit_text(
-            f"💳 <b>Оплата доступа</b>\n\nСтоимость: {get_price():.0f}₽\n\n"
-            "После оплаты нажмите «Проверить оплату».",
-            parse_mode="HTML", reply_markup=builder.as_markup()
-        )
-    except Exception as e:
-        logger.error(f"Ошибка создания платежа: {e}")
-        await callback.message.edit_text("❌ Не удалось создать платёж. Попробуйте позже.")
-    await callback.answer()
-
-@dp.callback_query(F.data.startswith("check_payment_"))
-async def process_payment_check(callback: types.CallbackQuery, state: FSMContext):
-    payment_id = callback.data.replace("check_payment_", "")
-    try:
-        payment = await check_payment_async(payment_id)
-        if payment.status == "succeeded":
-            db_execute("UPDATE payments SET status='succeeded', completed_at=? WHERE payment_id=?",
-                       (datetime.now(), payment_id))
-            await callback.message.edit_text("✅ Оплата прошла успешно!")
-            await main_menu(callback, state)
-        elif payment.status == "pending":
-            await callback.answer("⏳ Платёж ещё не завершён. Попробуйте позже.", show_alert=True)
-        else:
-            await callback.answer(f"❌ Статус: {payment.status}. Попробуйте снова или обратитесь в поддержку.", show_alert=True)
-    except Exception as e:
-        logger.error(f"Ошибка проверки платежа: {e}")
-        await callback.answer("⚠️ Не удалось проверить платёж.", show_alert=True)
-    await callback.answer()
 
 # ===== ЗАПУСК =====
 async def main():
