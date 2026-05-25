@@ -24,8 +24,8 @@ RADIUS_METERS = 50
 ADMIN_IDS = [5196749531]            # замените на свои Telegram ID
 IMAGES_FOLDER = "images"
 
-YOOKASSA_SHOP_ID = "ВАШ_SHOP_ID"
-YOOKASSA_SECRET_KEY = "ВАШ_СЕКРЕТНЫЙ_КЛЮЧ"
+YOOKASSA_SHOP_ID = "1363267"
+YOOKASSA_SECRET_KEY = "live_XjLtEtimRDR0qeJRjN3wh0YnfzHXJf18sQ30-XBfTuk"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
