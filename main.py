@@ -873,9 +873,7 @@ async def handle_location(message: types.Message, state: FSMContext):
         await state.clear()
         return
 
-    # Квест активен – сначала скрываем клавиатуру геопозиции
-    await bot.send_message(user_id, "\u200b", reply_markup=ReplyKeyboardRemove())
-
+    # Квест активен
     data = await state.get_data()
     current_id = data.get("current_idx")
     if current_id is None:
@@ -920,7 +918,37 @@ async def handle_location(message: types.Message, state: FSMContext):
                 await message.answer("🏆 Вы посетили все локации! Маршрут завершён.\n/start для нового захода.", reply_markup=get_main_menu_keyboard(user_id))
     else:
         dist = geodesic((message.location.latitude, message.location.longitude), (loc["lat"], loc["lon"])).meters
-        await message.answer(f"❌ До «{loc['name']}» ещё {dist:.0f} м.", reply_markup=get_quest_keyboard())
+        builder = InlineKeyboardBuilder()
+        builder.button(text="🏠 Главное меню", callback_data="main_menu")
+        # Определяем следующую непосещённую локацию, исключая текущую
+        unvisited = get_unvisited_locations(user_id)
+        if current_id in unvisited:
+            unvisited.remove(current_id)
+        if unvisited:
+            next_id = unvisited[0]
+            builder.button(text="📍 Следующая локация", callback_data=f"goto_location_{next_id}")
+        builder.adjust(1)
+        await message.answer(
+            f"❌ Вы не на месте! До «{loc['name']}» ещё {dist:.0f} м.\n\nВыберите действие:",
+            reply_markup=builder.as_markup()
+        )
+
+# Обработчик для кнопки "Следующая локация"
+@dp.callback_query(F.data.startswith("goto_location_"))
+async def goto_location(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    if not is_user_paid(user_id):
+        await callback.answer("Сначала оплатите доступ!", show_alert=True)
+        return
+    loc_id = int(callback.data.split("_")[2])
+    progress = get_user_progress(user_id)
+    if loc_id in progress:
+        await callback.answer("Эта локация уже отмечена.", show_alert=True)
+        return
+    await state.update_data(current_idx=loc_id)
+    await send_location_with_photo(callback.message.chat.id, loc_id)
+    await callback.message.edit_text("📍 Перешли к следующей локации.")
+    await callback.answer()
 
 # Статистика и информация
 @dp.callback_query(F.data == "my_stats")
@@ -1442,7 +1470,7 @@ async def admin_reply_send(message: Message, state: FSMContext):
         await state.clear()
     await show_admin_panel(message)
 
-# --- Заявки на добавление локаций ---
+# --- Заявки на добавление локаций (с оплатой) ---
 @dp.callback_query(F.data == "admin_location_requests")
 async def admin_location_requests(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS: return
@@ -1474,7 +1502,7 @@ async def approve_location_request(callback: types.CallbackQuery):
         return
     user_id, name, photo, tags, city, address, description = req[0]
     if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
-        await callback.answer("ЮKassa не настроена. Невозможно создать платёж.", show_alert=True)
+        await callback.answer("ЮKassa не настроена.", show_alert=True)
         return
     try:
         payment = await create_payment_async(
@@ -1515,7 +1543,7 @@ async def check_location_payment(callback: types.CallbackQuery):
             await bot.send_message(user_id, "✅ Оплата получена! Администратор скоро добавит вашу локацию на карту.")
             for admin_id in ADMIN_IDS:
                 await bot.send_message(admin_id, f"✅ Локация «{name}» оплачена. Добавьте её вручную через админ-панель.")
-            await callback.answer("Оплата подтверждена. Локация ожидает добавления.", show_alert=True)
+            await callback.answer("Оплата подтверждена.", show_alert=True)
         elif payment.status == "pending":
             await callback.answer("Платёж ещё не завершён.", show_alert=True)
         else:
